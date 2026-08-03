@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>愉閱空間・會計系統</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: #f2f4f7; color: #223; }
+  button { cursor: pointer; font-family: inherit; }
+
+  /* ===== 頂欄與分頁 ===== */
+  #topbar { background: #1f3a5f; color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #topbar h1 { font-size: 17px; letter-spacing: 2px; }
+  #topbar .sp { flex: 1; }
+  #userbox { font-size: 13px; opacity: .9; display: flex; gap: 8px; align-items: center; }
+  #userbox button { background: #46617c; color: #fff; border: none; border-radius: 6px; padding: 5px 10px; font-size: 12.5px; }
+  #saveState { font-size: 12.5px; padding: 3px 10px; border-radius: 10px; background: #2e4d75; }
+  #saveState.dirty { background: #b9770e; }
+  #saveState.err { background: #c0392b; }
+  #tabs { display: flex; gap: 4px; background: #16304f; padding: 6px 12px 0; flex-wrap: wrap; }
+  #tabs button { border: none; border-radius: 8px 8px 0 0; padding: 9px 18px; font-size: 14.5px; font-weight: bold; background: #2e4d75; color: #cdd9ea; }
+  #tabs button.on { background: #f2f4f7; color: #1f3a5f; }
+
+  main { max-width: 1080px; margin: 0 auto; padding: 18px 14px 80px; }
+  section.tab { display: none; }
+  section.tab.on { display: block; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .card h2 { font-size: 16px; margin-bottom: 10px; color: #1f3a5f; }
+  .hint { font-size: 12.5px; color: #789; margin-bottom: 8px; }
+
+  /* ===== 表格 ===== */
+  table.ledger { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.ledger th, table.ledger td { border: 1px solid #d8dee6; padding: 6px 7px; text-align: center; }
+  table.ledger th { background: #eef2f7; color: #345; white-space: nowrap; }
+  table.ledger td.l { text-align: left; }
+  table.ledger td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.ledger tr.ok { background: #eafaf0; }
+  table.ledger tr.bad { background: #fdeeee; }
+  .del { background: none; border: none; color: #c0392b; font-size: 15px; }
+  .subtotal { background: #f4f6fa; font-weight: bold; }
+
+  /* ===== 表單 ===== */
+  .frm { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .frm label { display: flex; flex-direction: column; font-size: 12px; color: #567; gap: 3px; }
+  .frm input, .frm select, .frm textarea { padding: 7px 8px; border: 1px solid #c6cfda; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .frm input.w-s { width: 90px; } .frm input.w-m { width: 130px; } .frm input.w-l { width: 200px; }
+  .btn { border: none; border-radius: 7px; padding: 9px 16px; font-size: 14px; font-weight: bold; color: #fff; background: #2980b9; }
+  .btn.green { background: #27ae60; } .btn.orange { background: #e67e22; } .btn.gray { background: #7f8c8d; } .btn.red { background: #c0392b; }
+  .btn.sm { padding: 5px 10px; font-size: 12.5px; }
+  .monthpick { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 14px; }
+  .monthpick input { padding: 6px; border: 1px solid #c6cfda; border-radius: 6px; font-size: 14px; }
+  textarea#bankPaste { width: 100%; min-height: 120px; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; }
+  .pill.ok { background: #d5f5e3; color: #1e8449; }
+  .pill.wait { background: #fdebd0; color: #af601a; }
+  .pill.paid { background: #d6eaf8; color: #21618c; }
+  .due-soon { color: #c0392b; font-weight: bold; }
+
+  /* ===== 登入 ===== */
+  #loginMask { position: fixed; inset: 0; background: #1f3a5f; display: flex; align-items: center; justify-content: center; z-index: 100; }
+  #loginBox { background: #fff; border-radius: 12px; padding: 32px 30px; width: 320px; display: flex; flex-direction: column; gap: 12px; }
+  #loginBox h1 { font-size: 19px; color: #1f3a5f; text-align: center; letter-spacing: 3px; }
+  #loginBox input { padding: 10px; border: 1px solid #c6cfda; border-radius: 7px; font-size: 15px; }
+  #loginErr { color: #c0392b; font-size: 13px; min-height: 17px; text-align: center; }
+
+  /* ===== 列印 ===== */
+  #printArea { display: none; }
+  @media print {
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loginMask">
+  <div id="loginBox">
+    <h1>會 計 系 統</h1>
+    <div style="text-align:center;font-size:13px;color:#789">愉閱空間・家功場</div>
+    <input id="liEmail" type="email" placeholder="Email" autocomplete="username">
+    <input id="liPw" type="password" placeholder="密碼" autocomplete="current-password">
+    <div id="loginErr"></div>
+    <button class="btn" id="btnLogin">登入</button>
+  </div>
+</div>
+
+<div id="topbar">
+  <h1>📒 會計系統</h1>
+  <span id="saveState">✔ 已同步</span>
+  <span class="sp"></span>
+  <div id="userbox"><span id="whoami"></span><button id="btnLogout">登出</button></div>
+</div>
+<div id="tabs">
+  <button data-tab="income" class="on">💰 收入對帳</button>
+  <button data-tab="reimb">🧾 請款單</button>
+  <button data-tab="fixed">📅 固定支出</button>
+  <button data-tab="payroll">👥 薪資申報</button>
+  <button data-tab="report">📊 月報</button>
+</div>
+
+<main>
+<!-- ============ 收入 ============ -->
+<section class="tab on" id="tab-income">
+  <div class="card">
+    <h2>🏦 玉山明細自動認列（日常對帳從這裡開始）</h2>
+    <p class="hint">把玉山網銀的存入明細整段貼進來 → 按「解析」→ 系統用名冊的後五碼自動認出是哪位家長 → 檢查沒問題就一鍵入帳。</p>
+    <textarea id="bankPaste" class="frm" placeholder="例：2026/08/05 網銀轉入 4,800 台幣轉帳 12345 ..." style="width:100%;min-height:110px"></textarea>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button class="btn orange" id="btnParse">解析明細</button>
+    </div>
+    <div id="parsePreview" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <h2>📇 家長名冊（姓名 ↔ 匯款後五碼）</h2>
+    <div id="rosterInfo" class="hint"></div>
+    <details>
+      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📥 從 Excel 批次匯入（點開）</summary>
+      <p class="hint" style="margin-top:8px">在 Excel 選取「姓名」「後五碼」兩欄複製，直接貼進來（一行一位），按匯入。</p>
+      <textarea id="rosterPaste" style="width:100%;min-height:90px" placeholder="王小明&#9;12345&#10;陳小美&#9;54321"></textarea>
+      <div style="margin-top:6px"><button class="btn sm" id="rosterImport">匯入名冊</button> <span id="rosterMsg" style="font-size:12.5px;color:#1e8449"></span></div>
+    </details>
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📖 查看／編輯完整名冊（點開）</summary>
+      <table class="ledger" id="rosterTable" style="margin-top:8px"></table>
+      <div class="frm" style="margin-top:10px">
+        <label>姓名<input id="roName" class="w-m"></label>
+        <label>後五碼<input id="roL5" class="w-s" maxlength="5" inputmode="numeric"></label>
+        <label>事業體<select id="roTax"></select></label>
+        <button class="btn green sm" id="roAdd">＋ 加一位</button>
+      </div>
+    </details>
+  </div>
+  <div class="card">
+    <h2>✍️ 手動記一筆（現金、名冊查不到的款項）</h2>
+    <div class="frm">
+      <label>日期<input type="date" id="incD" class="w-m"></label>
+      <label>學生<input id="incName" class="w-m"></label>
+      <label>金額<input id="incAmt" type="number" class="w-s"></label>
+      <label>匯款後五碼<input id="incL5" class="w-s" maxlength="5" inputmode="numeric"></label>
+      <label>事業體<select id="incTax"></select></label>
+      <label>備註<input id="incNote" class="w-l"></label>
+      <button class="btn green" id="incAdd">＋ 記一筆</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="monthpick">月份：<input type="month" id="incMonth"></div>
+    <h2>本月收入帳（入帳後記得開發票）</h2>
+    <div id="invSummary" class="hint"></div>
+    <table class="ledger" id="incTable"></table>
+  </div>
+</section>
+
+<!-- ============ 請款 ============ -->
+<section class="tab" id="tab-reimb">
+  <div class="card">
+    <h2>建立請款單（老師代付，須附發票）</h2>
+    <div class="frm" style="margin-bottom:10px">
+      <label>請款人<input id="rbPayer" class="w-m"></label>
+      <label>日期<input type="date" id="rbD" class="w-m"></label>
+      <label>發票開給（事業體）<select id="rbTax"></select></label>
+    </div>
+    <table class="ledger" id="rbItems"></table>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button class="btn gray sm" id="rbAddRow">＋ 加一列品項</button>
+      <button class="btn green" id="rbCreate">產生請款單</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>請款紀錄</h2>
+    <table class="ledger" id="rbTable"></table>
+  </div>
+</section>
+
+<!-- ============ 固定支出 ============ -->
+<section class="tab" id="tab-fixed">
+  <div class="card">
+    <h2>每月固定支出</h2>
+    <p class="hint">每月幾號該繳什麼，一目了然；本月繳完就打勾。三天內到期的會標紅色。</p>
+    <table class="ledger" id="fxTable"></table>
+    <div class="frm" style="margin-top:12px">
+      <label>項目<input id="fxName" class="w-m"></label>
+      <label>每月幾號<input id="fxDay" type="number" min="1" max="31" class="w-s"></label>
+      <label>金額(約)<input id="fxAmt" type="number" class="w-s"></label>
+      <label>事業體<select id="fxTax"></select></label>
+      <label>繳費方式<input id="fxMethod" class="w-m" placeholder="轉帳/超商/扣款"></label>
+      <button class="btn green" id="fxAdd">＋ 新增項目</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 薪資申報 ============ -->
+<section class="tab" id="tab-payroll">
+  <div class="card">
+    <div class="monthpick">月份：<input type="month" id="pyMonth"></div>
+    <h2>新增申報項目</h2>
+    <div class="frm">
+      <label>員工／項目<input id="pyWho" class="w-m"></label>
+      <label>類別<select id="pyCat">
+        <option>薪資</option><option>勞保費</option><option>健保費</option>
+        <option>勞退提繳</option><option>其他</option>
+      </select></label>
+      <label>金額<input id="pyAmt" type="number" class="w-s"></label>
+      <label>事業體<select id="pyTax"></select></label>
+      <label>備註<input id="pyNote" class="w-l"></label>
+      <button class="btn green" id="pyAdd">＋ 記一筆</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>本月薪資與可申報費用（按統編小計）</h2>
+    <table class="ledger" id="pyTable"></table>
+    <div style="margin-top:10px"><button class="btn orange" id="pyPrint">🖨 列印給會計師</button></div>
+  </div>
+</section>
+
+<!-- ============ 月報 ============ -->
+<section class="tab" id="tab-report">
+  <div class="card">
+    <div class="monthpick">月份：<input type="month" id="rpMonth"> <button class="btn" id="rpGen">產生月報</button>
+      <button class="btn orange" id="rpPrint">🖨 列印</button></div>
+    <div id="rpBody" style="font-size:14px"></div>
+  </div>
+</section>
+</main>
+
+<div id="printArea"></div>
+
+<script>
+/* ===== 常數 ===== */
+const SB_URL = 'https://nvnrkzveyehcnlaszzin.supabase.co';
+const SB_KEY = 'sb_publishable_8-cmiPFlZNzWu4VyhMA7dA_B0hteB1u';
+const SB_BUCKET = 'accounting';
+const ENTITIES = [
+  { tax: '00196747', name: '家功場放學趣有限公司', short: '有限公司' },
+  { tax: '18431234', name: '家功場放學趣文理短期補習班', short: '放學趣文理' },
+  { tax: '39969392', name: '家功場文理短期補習班', short: '家功場文理' },
+];
+const entName = t => (ENTITIES.find(e => e.tax === t) || {}).name || t;
+const entShort = t => (ENTITIES.find(e => e.tax === t) || {}).short || t;
+const NT = n => 'NT$ ' + Number(n || 0).toLocaleString('zh-TW');
+const todayStr = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+const thisMonth = () => todayStr().slice(0, 7);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ===== 登入（同 ws 工具的作法） ===== */
+let sbToken = localStorage.getItem('ac_sb_token') || null;
+let sbEmail = localStorage.getItem('ac_sb_email') || null;
+function sbHeaders(extra) { return Object.assign({ apikey: SB_KEY, Authorization: 'Bearer ' + (sbToken || SB_KEY) }, extra || {}); }
+function needsRefresh(status, text) { return status === 401 || status === 403 || (status === 400 && /jwt|exp|token/i.test(text || '')); }
+
+async function login(email, pw) {
+  const res = await fetch(SB_URL + '/auth/v1/token?grant_type=password', {
+    method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: pw }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.access_token) throw new Error(d.error_description || d.msg || '登入失敗');
+  sbToken = d.access_token; sbEmail = (d.user && d.user.email) || email;
+  localStorage.setItem('ac_sb_token', sbToken);
+  localStorage.setItem('ac_sb_email', sbEmail);
+  localStorage.setItem('ac_sb_refresh', d.refresh_token || '');
+}
+async function refreshToken() {
+  const rt = localStorage.getItem('ac_sb_refresh');
+  if (!rt) return false;
+  const res = await fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
+    method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: rt }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.access_token) return false;
+  sbToken = d.access_token;
+  localStorage.setItem('ac_sb_token', sbToken);
+  localStorage.setItem('ac_sb_refresh', d.refresh_token || rt);
+  return true;
+}
+function logout() {
+  ['ac_sb_token', 'ac_sb_email', 'ac_sb_refresh'].forEach(k => localStorage.removeItem(k));
+  location.reload();
+}
+
+/* ===== 雲端讀寫（每個區塊一個 JSON 檔） ===== */
+async function cloudGet(path) {
+  const res = await fetch(SB_URL + '/storage/v1/object/' + SB_BUCKET + '/' + path, { headers: sbHeaders() });
+  if (res.status === 400 || res.status === 404) return null;   // 檔案還不存在
+  if (!res.ok) {
+    const t = await res.clone().text();
+    if (needsRefresh(res.status, t)) { if (await refreshToken()) return cloudGet(path); showLogin('登入已過期，請重新登入'); throw new Error('expired'); }
+    throw new Error('讀取失敗 ' + res.status);
+  }
+  return res.json();
+}
+async function cloudPut(path, data) {
+  const res = await fetch(SB_URL + '/storage/v1/object/' + SB_BUCKET + '/' + path, {
+    method: 'POST',
+    headers: sbHeaders({ 'Content-Type': 'application/json', 'x-upsert': 'true' }),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const t = await res.clone().text();
+    if (needsRefresh(res.status, t)) { if (await refreshToken()) return cloudPut(path, data); showLogin('登入已過期，請重新登入'); throw new Error('expired'); }
+    throw new Error('存檔失敗 ' + res.status + ' ' + t.slice(0, 120));
+  }
+}
+
+/* ===== 存檔狀態（自動存，改了 1.2 秒後上傳） ===== */
+const saveState = document.getElementById('saveState');
+let saveTimers = {};
+function markDirty(key, path, getData) {
+  saveState.textContent = '⏳ 儲存中…'; saveState.className = 'dirty';
+  clearTimeout(saveTimers[key]);
+  saveTimers[key] = setTimeout(async () => {
+    try { await cloudPut(path, getData()); saveState.textContent = '✔ 已同步'; saveState.className = ''; }
+    catch (e) { if (e.message !== 'expired') { saveState.textContent = '⚠ 儲存失敗'; saveState.className = 'err'; } }
+  }, 1200);
+}
+
+/* ===== 資料 ===== */
+let income = [];            // 當月 [{d,name,amt,last5,tax,st,inv,note}]  st: '' 手動 | 'ok' 銀行認列
+let roster = [];            // 家長名冊 [{name,last5,tax}]
+const ROSTER_PATH = 'roster/list.json';
+let reimb = [];             // [{no,d,payer,tax,items:[{name,amt,inv,note}],total,status}]
+let fixedData = { items: [], paid: {} };  // items:[{name,day,amt,tax,method}] paid:{'YYYY-MM':{名稱:true}}
+let payroll = [];           // 當月 [{who,cat,amt,tax,note}]
+const incPath = m => 'income/' + m + '.json';
+const pyPath = m => 'payroll/' + m + '.json';
+const RB_PATH = 'reimburse/records.json', FX_PATH = 'fixed/list.json';
+
+/* ===== 分頁切換 ===== */
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + b.dataset.tab));
+});
+
+/* 事業體下拉選單 */
+document.querySelectorAll('#incTax,#rbTax,#fxTax,#pyTax,#roTax').forEach(sel => {
+  sel.innerHTML = ENTITIES.map(e => `<option value="${e.tax}">${e.short} ${e.tax}</option>`).join('');
+});
+
+/* ===== 家長名冊（姓名 ↔ 後五碼） ===== */
+function rosterFind(l5) { return roster.find(r => r.last5 === l5); }
+function renderRoster() {
+  document.getElementById('rosterInfo').textContent = roster.length
+    ? `名冊目前有 ${roster.length} 位家長。貼銀行明細時會自動用後五碼認人。`
+    : '名冊還是空的——先從 Excel 把「姓名＋後五碼」貼進來（點開下面的批次匯入）。';
+  const t = document.getElementById('rosterTable');
+  t.innerHTML = '<tr><th>姓名</th><th>後五碼</th><th>事業體</th><th></th></tr>' +
+    roster.map((r, i) => `<tr><td class="l">${esc(r.name)}</td><td>${esc(r.last5)}</td><td>${entShort(r.tax)}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`).join('');
+  t.querySelectorAll('.del').forEach(b => b.onclick = () => { roster.splice(+b.dataset.i, 1); renderRoster(); saveRoster(); });
+}
+function saveRoster() { markDirty('ro', ROSTER_PATH, () => roster); }
+document.getElementById('rosterImport').onclick = () => {
+  const lines = document.getElementById('rosterPaste').value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  let added = 0, skipped = 0; const conflicts = [];
+  for (const ln of lines) {
+    const l5m = ln.match(/(?<!\d)\d{5}(?!\d)/);
+    if (!l5m) continue;
+    const last5 = l5m[0];
+    const name = ln.replace(last5, '').replace(/[\t,;]+/g, ' ').trim();
+    if (!name) continue;
+    const ex = rosterFind(last5);
+    if (ex) { if (ex.name === name) skipped++; else conflicts.push(`${last5}：名冊是「${ex.name}」，貼上的是「${name}」`); continue; }
+    roster.push({ name, last5, tax: ENTITIES[0].tax });
+    added++;
+  }
+  renderRoster(); saveRoster();
+  document.getElementById('rosterMsg').textContent = `新增 ${added} 位` + (skipped ? `，${skipped} 位已存在略過` : '');
+  if (conflicts.length) alert('⚠️ 這些後五碼跟名冊不一致，沒有匯入，請確認：\n' + conflicts.join('\n'));
+  if (added) document.getElementById('rosterPaste').value = '';
+};
+document.getElementById('roAdd').onclick = () => {
+  const name = document.getElementById('roName').value.trim();
+  const last5 = document.getElementById('roL5').value.trim();
+  if (!name || !/^\d{5}$/.test(last5)) return alert('姓名必填，後五碼要是 5 位數字');
+  const ex = rosterFind(last5);
+  if (ex) return alert(`這個後五碼已經是「${ex.name}」的了`);
+  roster.push({ name, last5, tax: document.getElementById('roTax').value });
+  document.getElementById('roName').value = ''; document.getElementById('roL5').value = '';
+  renderRoster(); saveRoster();
+};
+
+/* ===== 收入帳 ===== */
+const incMonth = document.getElementById('incMonth');
+function renderIncome() {
+  const t = document.getElementById('incTable');
+  let sum = 0;
+  t.innerHTML = '<tr><th>日期</th><th>學生/家長</th><th>金額</th><th>後五碼</th><th>事業體</th><th>入帳</th><th>發票</th><th>備註</th><th></th></tr>' +
+    income.map((r, i) => {
+      sum += +r.amt || 0;
+      const st = r.st === 'ok' ? '✅銀行' : '✍️手動';
+      const inv = r.inv ? `<a href="#" data-inv="${i}" style="color:#21618c;text-decoration:none">${esc(r.inv)}</a>`
+        : `<button class="btn sm orange" data-inv="${i}">開發票</button>`;
+      return `<tr class="${r.st === 'ok' ? 'ok' : ''}"><td>${esc(r.d)}</td><td class="l">${esc(r.name)}</td><td class="num">${NT(r.amt)}</td><td>${esc(r.last5)}</td><td>${entShort(r.tax)}</td><td>${st}</td><td>${inv}</td><td class="l">${esc(r.note)}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`;
+    }).join('') +
+    `<tr class="subtotal"><td colspan="2">合計 ${income.length} 筆</td><td class="num">${NT(sum)}</td><td colspan="6"></td></tr>`;
+  t.querySelectorAll('.del').forEach(b => b.onclick = () => {
+    if (!confirm('刪除這筆收入？')) return;
+    income.splice(+b.dataset.i, 1); renderIncome(); saveIncome();
+  });
+  t.querySelectorAll('[data-inv]').forEach(el => el.onclick = e => {
+    e.preventDefault();
+    const i = +el.dataset.inv;
+    const v = prompt('發票號碼（例 AB12345678；清空可取消發票）', income[i].inv || '');
+    if (v === null) return;
+    income[i].inv = v.trim();
+    renderIncome(); saveIncome();
+  });
+  const noInv = income.filter(r => !r.inv);
+  document.getElementById('invSummary').innerHTML = noInv.length
+    ? `⚠️ 還有 <b style="color:#af601a">${noInv.length}</b> 筆未開發票（合計 ${NT(noInv.reduce((s, r) => s + +r.amt, 0))}）`
+    : (income.length ? '✅ 本月每一筆都開好發票了' : '本月還沒有收入紀錄');
+}
+function saveIncome() { markDirty('inc', incPath(incMonth.value), () => income); }
+async function loadIncome() { income = (await cloudGet(incPath(incMonth.value))) || []; renderIncome(); }
+incMonth.onchange = loadIncome;
+document.getElementById('incAdd').onclick = () => {
+  const r = { d: document.getElementById('incD').value || todayStr(),
+    name: document.getElementById('incName').value.trim(),
+    amt: +document.getElementById('incAmt').value,
+    last5: document.getElementById('incL5').value.trim(),
+    tax: document.getElementById('incTax').value, st: '', inv: '', note: document.getElementById('incNote').value.trim() };
+  if (!r.name || !r.amt) return alert('學生與金額必填');
+  if (r.last5 && !/^\d{5}$/.test(r.last5)) return alert('後五碼要是 5 位數字');
+  if (r.d.slice(0, 7) !== incMonth.value) { incMonth.value = r.d.slice(0, 7); }
+  income.push(r);
+  ['incName', 'incAmt', 'incL5', 'incNote'].forEach(id => document.getElementById(id).value = '');
+  renderIncome(); saveIncome();
+};
+
+/* ===== 玉山明細自動認列 ===== */
+let parsed = [];   // {d, amt, last5, name, known, dup, sel, addRoster}
+function parseBankLine(ln) {
+  const five = ln.match(/(?<!\d)\d{5}(?!\d)/g) || [];
+  let d = todayStr(), rest = ln;
+  /* 先把日期挑出來並從字串移除，免得年份被誤認成金額 */
+  let m = rest.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) { d = m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0'); rest = rest.replace(m[0], ' '); }
+  else if ((m = rest.match(/(?<!\d)(\d{1,2})[\/\-.](\d{1,2})(?![\/\-.\d])/))) {
+    d = todayStr().slice(0, 4) + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0'); rest = rest.replace(m[0], ' ');
+  }
+  /* 把後五碼也移除，剩下的才拿來找金額；有千分位逗號的優先 */
+  for (const f of five) rest = rest.replace(new RegExp('(?<!\\d)' + f + '(?!\\d)'), ' ');
+  const toks = rest.match(/\d{1,3}(?:,\d{3})+|\d+/g) || [];
+  const withComma = toks.filter(t => t.includes(','));
+  const cand = (withComma.length ? withComma : toks).map(t => +t.replace(/,/g, '')).filter(n => n >= 100);
+  if (!five.length || !cand.length) return null;
+  const last5 = five.find(f => rosterFind(f)) || five[five.length - 1];
+  return { d, amt: cand[0], last5 };
+}
+document.getElementById('btnParse').onclick = () => {
+  const lines = document.getElementById('bankPaste').value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  parsed = [];
+  let bad = 0;
+  for (const ln of lines) {
+    const p = parseBankLine(ln);
+    if (!p) { bad++; continue; }
+    const hit = rosterFind(p.last5);
+    const dup = income.some(r => r.last5 === p.last5 && +r.amt === p.amt && r.d === p.d);
+    parsed.push({ ...p, name: hit ? hit.name : '', tax: hit ? hit.tax : ENTITIES[0].tax,
+      known: !!hit, dup, sel: !dup, addRoster: false, line: ln });
+  }
+  renderParsed(bad);
+};
+function renderParsed(bad) {
+  const box = document.getElementById('parsePreview');
+  if (!parsed.length) { box.innerHTML = '<p style="color:#c0392b">沒有解析出任何一筆（每行要有金額和後五碼）。</p>'; return; }
+  const unknown = parsed.filter(p => !p.known).length;
+  box.innerHTML =
+    `<p style="font-size:13.5px;margin-bottom:8px">解析出 <b>${parsed.length}</b> 筆` +
+    (bad ? `（另有 ${bad} 行看不懂已略過）` : '') +
+    `，名冊自動認出 <b style="color:#1e8449">${parsed.length - unknown}</b> 筆` +
+    (unknown ? `，<b style="color:#af601a">${unknown}</b> 筆查無此後五碼（請填姓名，可順便存進名冊）` : '') + '。</p>' +
+    `<table class="ledger"><tr><th>入帳</th><th>日期</th><th>金額</th><th>後五碼</th><th>認出是誰</th><th>存進名冊</th><th>狀態</th></tr>` +
+    parsed.map((p, i) => `<tr class="${p.dup ? 'bad' : (p.known ? 'ok' : '')}">
+      <td><input type="checkbox" data-k="sel" data-i="${i}" ${p.sel ? 'checked' : ''}></td>
+      <td>${esc(p.d)}</td>
+      <td><input type="number" data-k="amt" data-i="${i}" value="${esc(p.amt)}" style="width:84px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"></td>
+      <td>${esc(p.last5)}</td>
+      <td>${p.known ? esc(p.name) : `<input data-k="name" data-i="${i}" value="${esc(p.name)}" placeholder="這是誰？" style="width:110px;padding:4px;border:1px solid #e67e22;border-radius:5px">`}</td>
+      <td>${p.known ? '已在名冊' : `<input type="checkbox" data-k="addRoster" data-i="${i}" checked>`}</td>
+      <td>${p.dup ? '⚠️已入帳過' : (p.known ? '✅' : '❓待認')}</td></tr>`).join('') +
+    '</table>' +
+    `<div style="margin-top:10px"><button class="btn green" id="btnCommit">✔ 確認入帳（勾選的 ${parsed.filter(p => p.sel).length} 筆）</button></div>`;
+  box.querySelectorAll('input[data-k]').forEach(inp => inp.onchange = () => {
+    const p = parsed[+inp.dataset.i];
+    if (inp.dataset.k === 'sel') p.sel = inp.checked;
+    else if (inp.dataset.k === 'addRoster') p.addRoster = inp.checked;
+    else if (inp.dataset.k === 'amt') p.amt = +inp.value;
+    else p.name = inp.value.trim();
+    if (inp.dataset.k === 'sel') renderParsed(0);
+  });
+  const btn = document.getElementById('btnCommit');
+  if (btn) btn.onclick = commitParsed;
+  parsed.forEach(p => { if (!p.known) p.addRoster = true; });
+}
+async function commitParsed() {
+  const rows = parsed.filter(p => p.sel);
+  if (!rows.length) return alert('沒有勾選任何一筆');
+  const noName = rows.filter(p => !p.name);
+  if (noName.length) return alert('還有 ' + noName.length + ' 筆不知道是誰（後五碼 ' + noName.map(p => p.last5).join('、') + '），請先填姓名或取消勾選');
+  const btn = document.getElementById('btnCommit');
+  btn.disabled = true; btn.textContent = '入帳中…';
+  try {
+    /* 依月份分組寫入各自的帳本檔 */
+    const byMonth = {};
+    rows.forEach(p => { (byMonth[p.d.slice(0, 7)] = byMonth[p.d.slice(0, 7)] || []).push(p); });
+    for (const m of Object.keys(byMonth)) {
+      const list = (m === incMonth.value) ? income : ((await cloudGet(incPath(m))) || []);
+      byMonth[m].forEach(p => list.push({ d: p.d, name: p.name, amt: p.amt, last5: p.last5, tax: p.tax, st: 'ok', inv: '', note: '' }));
+      await cloudPut(incPath(m), list);
+      if (m === incMonth.value) { income = list; }
+    }
+    /* 新面孔存進名冊 */
+    let ro = 0;
+    rows.forEach(p => { if (!p.known && p.addRoster && !rosterFind(p.last5)) { roster.push({ name: p.name, last5: p.last5, tax: p.tax }); ro++; } });
+    if (ro) { await cloudPut(ROSTER_PATH, roster); renderRoster(); }
+    renderIncome();
+    document.getElementById('parsePreview').innerHTML =
+      `<p style="color:#1e8449;font-size:14px">🎉 已入帳 ${rows.length} 筆` + (ro ? `，並把 ${ro} 位新家長存進名冊` : '') + `。下一步：到「本月收入帳」把發票開一開（有橘色「開發票」按鈕的就是還沒開的）。</p>`;
+    document.getElementById('bankPaste').value = '';
+    parsed = [];
+  } catch (e) {
+    if (e.message !== 'expired') alert('入帳失敗：' + e.message);
+    btn.disabled = false; btn.textContent = '✔ 確認入帳';
+  }
+}
+
+/* ===== 請款 ===== */
+function rbBlankRow() { return { name: '', amt: '', inv: '', note: '' }; }
+let rbDraft = [rbBlankRow()];
+function renderRbDraft() {
+  const t = document.getElementById('rbItems');
+  t.innerHTML = '<tr><th style="width:34%">品項</th><th>金額</th><th>發票號碼</th><th>備註</th><th></th></tr>' +
+    rbDraft.map((r, i) => `<tr>
+      <td><input data-i="${i}" data-k="name" value="${esc(r.name)}" style="width:98%;border:none;font-size:13.5px"></td>
+      <td><input data-i="${i}" data-k="amt" type="number" value="${esc(r.amt)}" style="width:90px;border:none;font-size:13.5px;text-align:right"></td>
+      <td><input data-i="${i}" data-k="inv" value="${esc(r.inv)}" placeholder="AB12345678" style="width:110px;border:none;font-size:13.5px"></td>
+      <td><input data-i="${i}" data-k="note" value="${esc(r.note)}" style="width:98%;border:none;font-size:13.5px"></td>
+      <td><button class="del" data-i="${i}">✕</button></td></tr>`).join('');
+  t.querySelectorAll('input').forEach(inp => inp.onchange = () => { rbDraft[+inp.dataset.i][inp.dataset.k] = inp.value; });
+  t.querySelectorAll('.del').forEach(b => b.onclick = () => { rbDraft.splice(+b.dataset.i, 1); if (!rbDraft.length) rbDraft = [rbBlankRow()]; renderRbDraft(); });
+}
+document.getElementById('rbAddRow').onclick = () => { rbDraft.push(rbBlankRow()); renderRbDraft(); };
+document.getElementById('rbCreate').onclick = () => {
+  const payer = document.getElementById('rbPayer').value.trim();
+  const d = document.getElementById('rbD').value || todayStr();
+  const tax = document.getElementById('rbTax').value;
+  const items = rbDraft.filter(r => r.name && +r.amt);
+  if (!payer) return alert('請款人必填');
+  if (!items.length) return alert('至少要有一列品項');
+  const noInv = items.filter(r => !r.inv.trim());
+  if (noInv.length) return alert('每一列都要有發票號碼才能請款：「' + noInv[0].name + '」缺發票');
+  const total = items.reduce((s, r) => s + +r.amt, 0);
+  const no = 'R' + d.replace(/-/g, '') + '-' + String(reimb.length + 1).padStart(2, '0');
+  const rec = { no, d, payer, tax, items, total, status: '待付款' };
+  reimb.unshift(rec);
+  renderReimb(); markDirty('rb', RB_PATH, () => reimb);
+  printReimb(rec);
+  rbDraft = [rbBlankRow()]; renderRbDraft();
+  document.getElementById('rbPayer').value = '';
+};
+function renderReimb() {
+  const t = document.getElementById('rbTable');
+  t.innerHTML = '<tr><th>單號</th><th>日期</th><th>請款人</th><th>金額</th><th>事業體</th><th>狀態</th><th>操作</th></tr>' +
+    reimb.map((r, i) => `<tr>
+      <td>${esc(r.no)}</td><td>${esc(r.d)}</td><td>${esc(r.payer)}</td>
+      <td class="num">${NT(r.total)}</td><td>${entShort(r.tax)}</td>
+      <td><span class="pill ${r.status === '已付款' ? 'paid' : 'wait'}">${r.status}</span></td>
+      <td><button class="btn sm gray" data-a="tgl" data-i="${i}">${r.status === '已付款' ? '改回待付' : '標記已付'}</button>
+          <button class="btn sm orange" data-a="prt" data-i="${i}">🖨</button>
+          <button class="del" data-a="del" data-i="${i}">✕</button></td></tr>`).join('') || '<tr><td>還沒有請款紀錄</td></tr>';
+  t.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const i = +b.dataset.i, a = b.dataset.a;
+    if (a === 'tgl') reimb[i].status = reimb[i].status === '已付款' ? '待付款' : '已付款';
+    if (a === 'prt') return printReimb(reimb[i]);
+    if (a === 'del') { if (!confirm('刪除這張請款單？')) return; reimb.splice(i, 1); }
+    renderReimb(); markDirty('rb', RB_PATH, () => reimb);
+  });
+}
+function printReimb(r) {
+  document.getElementById('printArea').innerHTML = `
+  <div style="max-width:700px;margin:0 auto;font-family:'PingFang TC',sans-serif">
+    <h1 style="text-align:center;letter-spacing:8px;font-size:26px">請 款 單</h1>
+    <div style="text-align:center;color:#555;font-size:14px;margin:4px 0 24px">${esc(entName(r.tax))}（統編 ${esc(r.tax)}）</div>
+    <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:12px">
+      <span>請款人：${esc(r.payer)}</span><span>請款日期：${esc(r.d)}</span><span>單號：${esc(r.no)}</span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <tr><th style="border:1px solid #333;padding:9px;background:#f0f0f0;width:40%">品項</th>
+          <th style="border:1px solid #333;padding:9px;background:#f0f0f0">金額</th>
+          <th style="border:1px solid #333;padding:9px;background:#f0f0f0">發票號碼</th>
+          <th style="border:1px solid #333;padding:9px;background:#f0f0f0">備註</th></tr>
+      ${r.items.map(it => `<tr><td style="border:1px solid #333;padding:9px">${esc(it.name)}</td>
+        <td style="border:1px solid #333;padding:9px;text-align:right">${NT(it.amt)}</td>
+        <td style="border:1px solid #333;padding:9px;text-align:center">${esc(it.inv)}</td>
+        <td style="border:1px solid #333;padding:9px">${esc(it.note)}</td></tr>`).join('')}
+      <tr><td style="border:1px solid #333;padding:9px;font-weight:bold">合計</td>
+          <td style="border:1px solid #333;padding:9px;text-align:right;font-weight:bold">${NT(r.total)}</td>
+          <td style="border:1px solid #333" colspan="2"></td></tr>
+    </table>
+    <div style="display:flex;justify-content:space-between;margin-top:56px;font-size:14px">
+      <div style="width:30%;border-top:1px solid #333;padding-top:8px;text-align:center">請款人簽名</div>
+      <div style="width:30%;border-top:1px solid #333;padding-top:8px;text-align:center">核准（負責人）</div>
+      <div style="width:30%;border-top:1px solid #333;padding-top:8px;text-align:center">付款確認</div></div>
+    <p style="font-size:12px;color:#777;margin-top:24px">※ 請款須附發票正本，發票買受人統編須為本事業體統編。</p>
+  </div>`;
+  window.print();
+}
+
+/* ===== 固定支出 ===== */
+function renderFixed() {
+  const m = thisMonth();
+  const today = +todayStr().slice(8, 10);
+  const paid = fixedData.paid[m] || {};
+  const items = [...fixedData.items].sort((a, b) => a.day - b.day);
+  const t = document.getElementById('fxTable');
+  t.innerHTML = '<tr><th>本月已繳</th><th>項目</th><th>每月幾號</th><th>金額(約)</th><th>事業體</th><th>繳費方式</th><th></th></tr>' +
+    items.map(r => {
+      const i = fixedData.items.indexOf(r);
+      const dueSoon = !paid[r.name] && r.day >= today && r.day <= today + 3;
+      const overdue = !paid[r.name] && r.day < today;
+      return `<tr>
+        <td><input type="checkbox" data-n="${esc(r.name)}" ${paid[r.name] ? 'checked' : ''}></td>
+        <td class="l">${esc(r.name)}</td>
+        <td class="${dueSoon || overdue ? 'due-soon' : ''}">${r.day} 號${overdue ? '（已過期）' : dueSoon ? '（快到了）' : ''}</td>
+        <td class="num">${NT(r.amt)}</td><td>${entShort(r.tax)}</td><td>${esc(r.method)}</td>
+        <td><button class="del" data-i="${i}">✕</button></td></tr>`;
+    }).join('') || '<tr><td>還沒有固定支出項目，從下面新增</td></tr>';
+  t.querySelectorAll('input[type=checkbox]').forEach(c => c.onchange = () => {
+    fixedData.paid[m] = fixedData.paid[m] || {};
+    fixedData.paid[m][c.dataset.n] = c.checked;
+    renderFixed(); markDirty('fx', FX_PATH, () => fixedData);
+  });
+  t.querySelectorAll('.del').forEach(b => b.onclick = () => {
+    if (!confirm('刪除這個固定支出項目？')) return;
+    fixedData.items.splice(+b.dataset.i, 1); renderFixed(); markDirty('fx', FX_PATH, () => fixedData);
+  });
+}
+document.getElementById('fxAdd').onclick = () => {
+  const r = { name: document.getElementById('fxName').value.trim(),
+    day: +document.getElementById('fxDay').value, amt: +document.getElementById('fxAmt').value || 0,
+    tax: document.getElementById('fxTax').value, method: document.getElementById('fxMethod').value.trim() };
+  if (!r.name || !r.day) return alert('項目與繳費日必填');
+  fixedData.items.push(r);
+  ['fxName', 'fxDay', 'fxAmt', 'fxMethod'].forEach(id => document.getElementById(id).value = '');
+  renderFixed(); markDirty('fx', FX_PATH, () => fixedData);
+};
+
+/* ===== 薪資申報 ===== */
+const pyMonth = document.getElementById('pyMonth');
+function renderPayroll() {
+  const t = document.getElementById('pyTable');
+  const byTax = {};
+  payroll.forEach(r => { (byTax[r.tax] = byTax[r.tax] || []).push(r); });
+  let html = '<tr><th>員工／項目</th><th>類別</th><th>金額</th><th>備註</th><th></th></tr>';
+  let grand = 0;
+  for (const tax of Object.keys(byTax)) {
+    html += `<tr class="subtotal"><td colspan="5" class="l">▍${esc(entName(tax))}（${esc(tax)}）</td></tr>`;
+    let sub = 0;
+    byTax[tax].forEach(r => {
+      const i = payroll.indexOf(r); sub += +r.amt || 0;
+      html += `<tr><td class="l">${esc(r.who)}</td><td>${esc(r.cat)}</td><td class="num">${NT(r.amt)}</td><td class="l">${esc(r.note)}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`;
+    });
+    grand += sub;
+    html += `<tr class="subtotal"><td colspan="2">小計</td><td class="num">${NT(sub)}</td><td colspan="2"></td></tr>`;
+  }
+  html += `<tr class="subtotal"><td colspan="2">全部合計</td><td class="num">${NT(grand)}</td><td colspan="2"></td></tr>`;
+  t.innerHTML = html;
+  t.querySelectorAll('.del').forEach(b => b.onclick = () => { payroll.splice(+b.dataset.i, 1); renderPayroll(); savePayroll(); });
+}
+function savePayroll() { markDirty('py', pyPath(pyMonth.value), () => payroll); }
+async function loadPayroll() { payroll = (await cloudGet(pyPath(pyMonth.value))) || []; renderPayroll(); }
+pyMonth.onchange = loadPayroll;
+document.getElementById('pyAdd').onclick = () => {
+  const r = { who: document.getElementById('pyWho').value.trim(), cat: document.getElementById('pyCat').value,
+    amt: +document.getElementById('pyAmt').value, tax: document.getElementById('pyTax').value,
+    note: document.getElementById('pyNote').value.trim() };
+  if (!r.who || !r.amt) return alert('項目與金額必填');
+  payroll.push(r);
+  ['pyWho', 'pyAmt', 'pyNote'].forEach(id => document.getElementById(id).value = '');
+  renderPayroll(); savePayroll();
+};
+document.getElementById('pyPrint').onclick = () => {
+  const m = pyMonth.value;
+  const byTax = {};
+  payroll.forEach(r => { (byTax[r.tax] = byTax[r.tax] || []).push(r); });
+  let body = '';
+  for (const tax of Object.keys(byTax)) {
+    const rows = byTax[tax]; const sub = rows.reduce((s, r) => s + +r.amt, 0);
+    body += `<h3 style="margin:18px 0 8px;font-size:15px">${esc(entName(tax))}（統編 ${esc(tax)}）</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <tr><th style="border:1px solid #333;padding:7px;background:#f0f0f0">員工／項目</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">類別</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">金額</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">備註</th></tr>
+      ${rows.map(r => `<tr><td style="border:1px solid #333;padding:7px">${esc(r.who)}</td><td style="border:1px solid #333;padding:7px;text-align:center">${esc(r.cat)}</td><td style="border:1px solid #333;padding:7px;text-align:right">${NT(r.amt)}</td><td style="border:1px solid #333;padding:7px">${esc(r.note)}</td></tr>`).join('')}
+      <tr><td style="border:1px solid #333;padding:7px;font-weight:bold" colspan="2">小計</td><td style="border:1px solid #333;padding:7px;text-align:right;font-weight:bold">${NT(sub)}</td><td style="border:1px solid #333"></td></tr>
+    </table>`;
+  }
+  document.getElementById('printArea').innerHTML = `
+    <div style="max-width:700px;margin:0 auto;font-family:'PingFang TC',sans-serif">
+    <h1 style="text-align:center;font-size:20px">薪資與申報費用彙總表　${esc(m)}</h1>${body}
+    <p style="font-size:12px;color:#777;margin-top:20px">製表日期：${todayStr()}</p></div>`;
+  window.print();
+};
+
+/* ===== 月報 ===== */
+document.getElementById('rpGen').onclick = buildReport;
+document.getElementById('rpPrint').onclick = () => {
+  document.getElementById('printArea').innerHTML = `<div style="max-width:700px;margin:0 auto;font-family:'PingFang TC',sans-serif">${document.getElementById('rpBody').innerHTML}</div>`;
+  window.print();
+};
+async function buildReport() {
+  const m = document.getElementById('rpMonth').value;
+  if (!m) return;
+  const [inc, py] = await Promise.all([cloudGet(incPath(m)), cloudGet(pyPath(m))]);
+  const incRows = inc || [], pyRows = py || [];
+  const rbRows = reimb.filter(r => r.d.slice(0, 7) === m);
+  const fxItems = fixedData.items, fxPaid = fixedData.paid[m] || {};
+  const sum = a => a.reduce((s, r) => s + (+r.amt || +r.total || 0), 0);
+  const byTax = (rows, key) => { const g = {}; rows.forEach(r => { g[r[key || 'tax']] = (g[r[key || 'tax']] || 0) + (+r.amt || +r.total || 0); }); return g; };
+  const taxLines = g => Object.entries(g).map(([t, v]) => `${entShort(t)}：${NT(v)}`).join('　') || '—';
+  const okCnt = incRows.filter(r => r.st === 'ok').length;
+  document.getElementById('rpBody').innerHTML = `
+    <h1 style="font-size:20px;text-align:center;margin:10px 0 18px">月報　${esc(m)}</h1>
+    <h3 style="margin:12px 0 6px">💰 學費收入</h3>
+    <p>共 ${incRows.length} 筆，合計 <b>${NT(sum(incRows))}</b>；已對帳 ${okCnt} 筆${incRows.length - okCnt ? `，<span style="color:#c0392b">未對上 ${incRows.length - okCnt} 筆</span>` : ''}。</p>
+    <p style="color:#567;font-size:13px">${taxLines(byTax(incRows))}</p>
+    <h3 style="margin:12px 0 6px">🧾 請款支出</h3>
+    <p>共 ${rbRows.length} 張，合計 <b>${NT(sum(rbRows))}</b>（未付：${rbRows.filter(r => r.status !== '已付款').length} 張）。</p>
+    <h3 style="margin:12px 0 6px">📅 固定支出</h3>
+    <p>${fxItems.length ? fxItems.map(r => `${esc(r.name)} ${fxPaid[r.name] ? '✅' : '⬜'}`).join('　') : '尚未設定'}</p>
+    <h3 style="margin:12px 0 6px">👥 薪資申報</h3>
+    <p>共 ${pyRows.length} 筆，合計 <b>${NT(sum(pyRows))}</b>。</p>
+    <p style="color:#567;font-size:13px">${taxLines(byTax(pyRows))}</p>
+    <p style="font-size:12px;color:#777;margin-top:18px">製表日期：${todayStr()}</p>`;
+}
+
+/* ===== 啟動 ===== */
+function showLogin(msg) {
+  document.getElementById('loginMask').style.display = 'flex';
+  document.getElementById('loginErr').textContent = msg || '';
+}
+document.getElementById('btnLogin').onclick = async () => {
+  try {
+    await login(document.getElementById('liEmail').value.trim(), document.getElementById('liPw').value);
+    document.getElementById('loginMask').style.display = 'none';
+    boot();
+  } catch (e) { document.getElementById('loginErr').textContent = e.message; }
+};
+document.getElementById('liPw').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnLogin').click(); });
+document.getElementById('btnLogout').onclick = logout;
+
+async function boot() {
+  document.getElementById('whoami').textContent = sbEmail || '';
+  incMonth.value = thisMonth(); pyMonth.value = thisMonth();
+  document.getElementById('rpMonth').value = thisMonth();
+  document.getElementById('incD').value = todayStr();
+  document.getElementById('rbD').value = todayStr();
+  renderRbDraft();
+  try {
+    const [rb, fx, ro] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), loadIncome(), loadPayroll()]);
+    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || [];
+    renderReimb(); renderFixed(); renderRoster();
+  } catch (e) { if (e.message !== 'expired') alert('資料載入失敗：' + e.message); }
+}
+
+(async () => {
+  if (sbToken && await refreshToken()) { document.getElementById('loginMask').style.display = 'none'; boot(); }
+  else showLogin('');
+})();
+</script>
+</body>
+</html>
