@@ -84,6 +84,7 @@
     <input id="liPw" type="password" placeholder="密碼" autocomplete="current-password">
     <div id="loginErr"></div>
     <button class="btn" id="btnLogin">登入</button>
+    <a href="#" id="liForgot" style="font-size:13px;color:#2980b9;text-align:center;text-decoration:none">首次使用或忘記密碼？寄「設定密碼」信給我</a>
   </div>
 </div>
 
@@ -1109,6 +1110,55 @@ document.getElementById('btnLogin').onclick = async () => {
 document.getElementById('liPw').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnLogin').click(); });
 document.getElementById('btnLogout').onclick = logout;
 
+/* 首次使用／忘記密碼：寄設定密碼信（連結會回到本站） */
+document.getElementById('liForgot').onclick = async e => {
+  e.preventDefault();
+  const email = document.getElementById('liEmail').value.trim() || prompt('請輸入你的 Email');
+  if (!email) return;
+  const res = await fetch(SB_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent('https://money.our-reading-space.com'), {
+    method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const err = document.getElementById('loginErr');
+  err.style.color = res.ok ? '#1e8449' : '#c0392b';
+  err.textContent = res.ok ? '已寄出設定密碼信到 ' + email + '，請收信（記得看垃圾郵件）點連結回來設定' : '寄送失敗，請確認 Email 或稍後再試';
+};
+
+/* 從信件連結回來（網址帶 access_token）→ 顯示設定密碼畫面 */
+function handleAuthHash() {
+  const hp = new URLSearchParams(location.hash.slice(1));
+  const token = hp.get('access_token'), type = hp.get('type');
+  if (!token || !['recovery', 'invite', 'signup', 'magiclink'].includes(type)) return false;
+  const rt = hp.get('refresh_token') || '';
+  showLogin('');
+  document.getElementById('loginBox').innerHTML = `
+    <h1>設 定 密 碼</h1>
+    <div style="text-align:center;font-size:13px;color:#789">為你的帳號設定登入密碼</div>
+    <input id="np1" type="password" placeholder="新密碼（至少 6 碼）">
+    <input id="np2" type="password" placeholder="再輸入一次">
+    <div id="npErr" style="color:#c0392b;font-size:13px;min-height:17px;text-align:center"></div>
+    <button class="btn" id="npGo">確認設定並登入</button>`;
+  document.getElementById('npGo').onclick = async () => {
+    const p1 = document.getElementById('np1').value, p2 = document.getElementById('np2').value;
+    const err = document.getElementById('npErr');
+    if (p1.length < 6) return err.textContent = '密碼至少 6 碼';
+    if (p1 !== p2) return err.textContent = '兩次輸入不一樣';
+    const r = await fetch(SB_URL + '/auth/v1/user', {
+      method: 'PUT', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: p1 }),
+    });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); return err.textContent = '設定失敗：' + (d.msg || d.error_description || r.status); }
+    const u = await fetch(SB_URL + '/auth/v1/user', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + token } }).then(x => x.json()).catch(() => ({}));
+    sbToken = token; sbEmail = u.email || '';
+    localStorage.setItem('ac_sb_token', token);
+    localStorage.setItem('ac_sb_refresh', rt);
+    localStorage.setItem('ac_sb_email', sbEmail);
+    history.replaceState(null, '', location.pathname);
+    location.reload();
+  };
+  return true;
+}
+
 async function boot() {
   document.getElementById('whoami').textContent = sbEmail || '';
   incMonth.value = thisMonth(); pyMonth.value = thisMonth();
@@ -1127,6 +1177,7 @@ async function boot() {
 }
 
 (async () => {
+  if (handleAuthHash()) return;   /* 信件連結進來 → 先設密碼 */
   if (sbToken && await refreshToken()) { document.getElementById('loginMask').style.display = 'none'; boot(); }
   else showLogin('');
 })();
