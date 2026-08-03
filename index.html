@@ -106,11 +106,17 @@
 <section class="tab on" id="tab-income">
   <div class="card">
     <h2>🏦 玉山明細自動認列（日常對帳從這裡開始）</h2>
-    <p class="hint">把玉山網銀的存入明細整段貼進來 → 按「解析」→ 系統用名冊的後五碼自動認出是哪位家長 → 檢查沒問題就一鍵入帳。</p>
-    <textarea id="bankPaste" class="frm" placeholder="例：2026/08/05 網銀轉入 4,800 台幣轉帳 12345 ..." style="width:100%;min-height:110px"></textarea>
-    <div style="margin-top:8px;display:flex;gap:8px">
-      <button class="btn orange" id="btnParse">解析明細</button>
+    <p class="hint">最快的方式：到玉山網銀匯出交易明細（Excel 檔），直接選檔案，系統自動抓出所有存入款並用後五碼認人。</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <label class="btn orange" style="display:inline-block;cursor:pointer">📂 選擇玉山明細 Excel 檔
+        <input type="file" id="bankFile" accept=".xls,.xlsx,.csv" style="display:none"></label>
+      <span id="bankFileMsg" style="font-size:13px;color:#1e8449"></span>
     </div>
+    <details>
+      <summary style="cursor:pointer;font-size:13px;color:#789">或改用手動貼文字（點開）</summary>
+      <textarea id="bankPaste" class="frm" placeholder="例：2026/08/05 網銀轉入 4,800 台幣轉帳 12345 ..." style="width:100%;min-height:110px;margin-top:8px"></textarea>
+      <div style="margin-top:8px"><button class="btn orange" id="btnParse">解析明細</button></div>
+    </details>
     <div id="parsePreview" style="margin-top:12px"></div>
   </div>
   <div class="card">
@@ -242,6 +248,7 @@
 
 <div id="printArea"></div>
 
+<script src="xlsx.full.min.js"></script>
 <script>
 /* ===== 常數 ===== */
 const SB_URL = 'https://nvnrkzveyehcnlaszzin.supabase.co';
@@ -541,6 +548,44 @@ function parseBankLine(ln) {
   const last5 = five.find(f => rosterFind(f)) || five[five.length - 1];
   return { d, amt: cand[0], last5 };
 }
+/* 直接讀玉山網銀匯出的 Excel（.xls/.xlsx/.csv），抓「存」>0 的交易 */
+document.getElementById('bankFile').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const msg = document.getElementById('bankFileMsg');
+  msg.textContent = '讀取中…';
+  try {
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+    /* 找表頭列（含「存」與「帳務日期」或「備註」） */
+    const hi = rows.findIndex(r => r.some(c => String(c).trim() === '存') && r.some(c => /帳務日期|備註/.test(String(c))));
+    if (hi < 0) throw new Error('找不到表頭（要有「存」「帳務日期」欄），確認是玉山交易明細的匯出檔');
+    const head = rows[hi].map(c => String(c).trim());
+    const col = name => head.findIndex(h => h.includes(name));
+    const cD = col('帳務日期'), cIn = head.indexOf('存'), cMemo = col('備註'), cAcct = col('轉出入'), cType = col('摘要');
+    parsed = [];
+    let skip = 0;
+    for (const r of rows.slice(hi + 1)) {
+      const amt = +String(r[cIn]).replace(/,/g, '');
+      if (!amt || amt <= 0) { skip++; continue; }
+      let d = String(r[cD]).trim().replace(/\//g, '-');
+      if (!/^\d{4}-\d{2}-\d{2}/.test(d)) d = todayStr();
+      const acct = String(r[cAcct] || '').trim();
+      const tail = acct.match(/(\d{5})\D*$/);
+      const last5 = tail ? tail[1] : '';
+      const memo = String(r[cMemo] || '').replace(/\d{3,}/g, '').trim();
+      const hit = last5 ? rosterFind(last5) : null;
+      const dup = income.some(x => x.last5 === last5 && +x.amt === amt && x.d === d);
+      parsed.push({ d: d.slice(0, 10), amt, last5, name: hit ? hit.name : '',
+        tax: hit ? hit.tax : ENTITIES[0].tax, known: !!hit, dup, sel: !dup,
+        addRoster: false, line: `${d.slice(0, 10)} 存入 ${amt.toLocaleString()} 末五碼 ${last5} ${memo} ${String(r[cType] || '')}`.trim() });
+    }
+    msg.textContent = `讀到 ${parsed.length} 筆存入（其他 ${skip} 列非存入已略過）`;
+    renderParsed(0);
+  } catch (err) { msg.textContent = ''; alert('讀檔失敗：' + err.message); }
+  e.target.value = '';
+};
+
 document.getElementById('btnParse').onclick = () => {
   const lines = document.getElementById('bankPaste').value.split(/\n+/).map(s => s.trim()).filter(Boolean);
   parsed = [];
