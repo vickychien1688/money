@@ -99,6 +99,7 @@
   <button data-tab="fixed">📅 固定支出</button>
   <button data-tab="payroll">👥 薪資申報</button>
   <button data-tab="report">📊 月報</button>
+  <button data-tab="boss" id="tabBoss" style="display:none">📔 日報(老闆)</button>
 </div>
 
 <main>
@@ -249,6 +250,15 @@
     <div id="rpBody" style="font-size:14px"></div>
   </div>
 </section>
+
+<!-- ============ 老闆日報（只有 Vicky 帳號看得到） ============ -->
+<section class="tab" id="tab-boss">
+  <div class="card">
+    <div class="monthpick">日期：<input type="date" id="bossDate"> <button class="btn" id="bossGen">產生日報</button></div>
+    <p class="hint">這個分頁只在妳（vickychien127@gmail.com）登入時出現，會計看不到。內容＝當天系統裡發生的所有事。</p>
+    <div id="bossBody" style="font-size:14px"></div>
+  </div>
+</section>
 </main>
 
 <div id="printArea"></div>
@@ -269,6 +279,8 @@ const entShort = t => (ENTITIES.find(e => e.tax === t) || {}).short || t;
 const NT = n => 'NT$ ' + Number(n || 0).toLocaleString('zh-TW');
 const todayStr = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
 const thisMonth = () => todayStr().slice(0, 7);
+const stamp = () => todayStr() + ' ' + new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Taipei', hour12: false });
+const who = () => (sbEmail || '').split('@')[0];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 /* ===== 登入（同 ws 工具的作法） ===== */
@@ -498,7 +510,7 @@ function renderPending() {
     const a2 = prompt('入帳金額（合繳拆帳時改成這位學生的部分）', String(p.amt));
     if (a2 === null) return;
     amt = +a2 || p.amt;
-    income.push({ d: p.d, name: name.trim(), amt, last5: p.last5, tax: ENTITIES[0].tax, st: 'ok', inv: '', note: amt !== p.amt ? `合繳${p.amt}拆帳` : '' });
+    income.push({ d: p.d, name: name.trim(), amt, last5: p.last5, tax: ENTITIES[0].tax, st: 'ok', inv: '', note: (amt !== p.amt ? `合繳${p.amt}拆帳` : '') + '（認領）', at: stamp(), by: who() });
     if (p.last5 && !rosterFind(p.last5) && confirm(`把「${name.trim()}＝${p.last5}」存進名冊，下次自動認得？`)) {
       roster.push({ name: name.trim(), last5: p.last5, tax: ENTITIES[0].tax }); renderRoster(); saveRoster();
     }
@@ -533,6 +545,7 @@ function renderIncome() {
     const v = prompt('發票號碼（米豆銷帳後會連收據一起產出，把發票號碼貼回這裡；清空可取消）', income[i].inv || '');
     if (v === null) return;
     income[i].inv = v.trim();
+    income[i].invAt = v.trim() ? stamp() : ''; income[i].invBy = v.trim() ? who() : '';
     renderIncome(); saveIncome();
   });
   const noInv = income.filter(r => !r.inv);
@@ -550,7 +563,7 @@ document.getElementById('incAdd').onclick = () => {
     name: document.getElementById('incName').value.trim(),
     amt: +document.getElementById('incAmt').value,
     last5: document.getElementById('incL5').value.trim(),
-    tax: document.getElementById('incTax').value, st: '', inv: '', note: document.getElementById('incNote').value.trim() };
+    tax: document.getElementById('incTax').value, st: '', inv: '', note: document.getElementById('incNote').value.trim(), at: stamp(), by: who() };
   if (!r.name || !r.amt) return alert('學生與金額必填');
   if (r.last5 && !/^\d{5}$/.test(r.last5)) return alert('後五碼要是 5 位數字');
   if (r.d.slice(0, 7) !== incMonth.value) { incMonth.value = r.d.slice(0, 7); }
@@ -685,7 +698,7 @@ async function commitParsed() {
     rows.forEach(p => { (byMonth[p.d.slice(0, 7)] = byMonth[p.d.slice(0, 7)] || []).push(p); });
     for (const m of Object.keys(byMonth)) {
       const list = (m === incMonth.value) ? income : ((await cloudGet(incPath(m))) || []);
-      byMonth[m].forEach(p => list.push({ d: p.d, name: p.name, amt: p.amt, last5: p.last5, tax: p.tax, st: 'ok', inv: '', note: '' }));
+      byMonth[m].forEach(p => list.push({ d: p.d, name: p.name, amt: p.amt, last5: p.last5, tax: p.tax, st: 'ok', inv: '', note: '', at: stamp(), by: who() }));
       await cloudPut(incPath(m), list);
       if (m === incMonth.value) { income = list; }
     }
@@ -736,7 +749,7 @@ document.getElementById('rbCreate').onclick = () => {
   if (noInv.length) return alert('每一列都要有發票號碼才能請款：「' + noInv[0].name + '」缺發票');
   const total = items.reduce((s, r) => s + +r.amt, 0);
   const no = 'R' + d.replace(/-/g, '') + '-' + String(reimb.length + 1).padStart(2, '0');
-  const rec = { no, d, payer, tax, items, total, status: '待付款' };
+  const rec = { no, d, payer, tax, items, total, status: '待付款', at: stamp(), by: who() };
   reimb.unshift(rec);
   renderReimb(); markDirty('rb', RB_PATH, () => reimb);
   printReimb(rec);
@@ -811,7 +824,7 @@ function renderFixed() {
     }).join('') || '<tr><td>還沒有固定支出項目，從下面新增</td></tr>';
   t.querySelectorAll('input[type=checkbox]').forEach(c => c.onchange = () => {
     fixedData.paid[m] = fixedData.paid[m] || {};
-    fixedData.paid[m][c.dataset.n] = c.checked;
+    fixedData.paid[m][c.dataset.n] = c.checked ? { at: stamp(), by: who() } : false;
     renderFixed(); markDirty('fx', FX_PATH, () => fixedData);
   });
   t.querySelectorAll('.del').forEach(b => b.onclick = () => {
@@ -857,7 +870,7 @@ pyMonth.onchange = loadPayroll;
 document.getElementById('pyAdd').onclick = () => {
   const r = { who: document.getElementById('pyWho').value.trim(), cat: document.getElementById('pyCat').value,
     amt: +document.getElementById('pyAmt').value, tax: document.getElementById('pyTax').value,
-    note: document.getElementById('pyNote').value.trim() };
+    note: document.getElementById('pyNote').value.trim(), at: stamp(), by: who() };
   if (!r.who || !r.amt) return alert('項目與金額必填');
   payroll.push(r);
   ['pyWho', 'pyAmt', 'pyNote'].forEach(id => document.getElementById(id).value = '');
@@ -916,6 +929,44 @@ async function buildReport() {
     <p style="font-size:12px;color:#777;margin-top:18px">製表日期：${todayStr()}</p>`;
 }
 
+/* ===== 老闆日報（只有 Vicky 帳號顯示） ===== */
+const OWNER = 'vickychien127@gmail.com';
+document.getElementById('bossGen').onclick = buildBoss;
+async function buildBoss() {
+  const d = document.getElementById('bossDate').value;
+  if (!d) return;
+  const m = d.slice(0, 7);
+  const inc = (m === incMonth.value) ? income : ((await cloudGet(incPath(m))) || []);
+  const py = (m === pyMonth.value) ? payroll : ((await cloudGet(pyPath(m))) || []);
+  const onDay = s => (s || '').startsWith(d);
+  const byTag = r => r.by ? `（${esc(r.by)} ${esc((r.at || '').slice(11, 16))}）` : '';
+  const incDay = inc.filter(r => onDay(r.at));
+  const invDay = inc.filter(r => onDay(r.invAt));
+  const rbDay = reimb.filter(r => onDay(r.at));
+  const pyDay = py.filter(r => onDay(r.at));
+  const fxPaid = fixedData.paid[m] || {};
+  const fxDay = Object.entries(fxPaid).filter(([n, v]) => v && onDay(v.at)).map(([n, v]) => ({ n, v }));
+  const sum = a => a.reduce((s, r) => s + (+r.amt || +r.total || 0), 0);
+  const bills = billing;
+  const okCnt = bills.filter(b => billStatus(b).txt === '✅繳齊').length;
+  const li = a => a.length ? '<ul style="margin:4px 0 0 20px">' + a.join('') + '</ul>' : '<span style="color:#789">　無</span>';
+  document.getElementById('bossBody').innerHTML = `
+    <h1 style="font-size:19px;margin:8px 0 14px">📔 ${esc(d)} 日報</h1>
+    <h3 style="margin:10px 0 4px">💰 收入入帳：${incDay.length} 筆、${NT(sum(incDay))}</h3>
+    ${li(incDay.map(r => `<li>${esc(r.name)} ${NT(r.amt)}｜後五碼 ${esc(r.last5) || '—'}${r.note ? '｜' + esc(r.note) : ''} ${byTag(r)}</li>`))}
+    <h3 style="margin:12px 0 4px">🧾 發票回填：${invDay.length} 筆</h3>
+    ${li(invDay.map(r => `<li>${esc(r.name)} → ${esc(r.inv)} （${esc(r.invBy || '')} ${esc((r.invAt || '').slice(11, 16))}）</li>`))}
+    <h3 style="margin:12px 0 4px">📄 請款單：${rbDay.length} 張、${NT(sum(rbDay))}</h3>
+    ${li(rbDay.map(r => `<li>${esc(r.no)}｜${esc(r.payer)}｜${NT(r.total)}｜${esc(r.status)} ${byTag(r)}</li>`))}
+    <h3 style="margin:12px 0 4px">👥 薪資申報新增：${pyDay.length} 筆、${NT(sum(pyDay))}</h3>
+    ${li(pyDay.map(r => `<li>${esc(r.who)}｜${esc(r.cat)}｜${NT(r.amt)} ${byTag(r)}</li>`))}
+    <h3 style="margin:12px 0 4px">📅 固定支出繳費打勾：${fxDay.length} 項</h3>
+    ${li(fxDay.map(x => `<li>${esc(x.n)} （${esc(x.v.by || '')} ${esc((x.v.at || '').slice(11, 16))}）</li>`))}
+    <h3 style="margin:12px 0 4px">📌 目前整體狀態</h3>
+    <p>應收 ${bills.length} 位：繳齊 ${okCnt}、未繳 ${bills.length - okCnt}；待認款項 ${pending.length} 筆${pending.length ? '（' + pending.map(p => p.last5 + ' ' + NT(p.amt)).join('、') + '）' : ''}；本月累計入帳 ${NT(sum(inc))}。</p>
+    <p style="font-size:12px;color:#789;margin-top:10px">※ 只統計系統內的操作；時間戳從 2026-08-03 之後的操作才有，之前的舊資料不會出現在「當日動作」裡。</p>`;
+}
+
 /* ===== 啟動 ===== */
 function showLogin(msg) {
   document.getElementById('loginMask').style.display = 'flex';
@@ -935,6 +986,8 @@ async function boot() {
   document.getElementById('whoami').textContent = sbEmail || '';
   incMonth.value = thisMonth(); pyMonth.value = thisMonth();
   document.getElementById('rpMonth').value = thisMonth();
+  document.getElementById('bossDate').value = todayStr();
+  if (sbEmail === OWNER) document.getElementById('tabBoss').style.display = '';
   document.getElementById('incD').value = todayStr();
   document.getElementById('rbD').value = todayStr();
   renderRbDraft();
