@@ -120,6 +120,11 @@
     <div id="parsePreview" style="margin-top:12px"></div>
   </div>
   <div class="card">
+    <h2>❓ 待認款項（錢進來了，還不知道是誰）</h2>
+    <p class="hint">解析後沒被入帳的存款自動留在這裡（存雲端，不會不見）。查出是誰後按「認領入帳」；確定不是學費的按 ✕ 移除。</p>
+    <table class="ledger" id="pendTable"></table>
+  </div>
+  <div class="card">
     <h2>📇 家長名冊（姓名 ↔ 匯款後五碼）</h2>
     <div id="rosterInfo" class="hint"></div>
     <details>
@@ -342,8 +347,10 @@ function markDirty(key, path, getData) {
 /* ===== 資料 ===== */
 let income = [];            // 當月 [{d,name,amt,last5,tax,st,inv,note}]  st: '' 手動 | 'ok' 銀行認列
 let roster = [];            // 家長名冊 [{name,last5,tax}]
-let billing = [];           // 當月應收（米豆繳費單）[{name,due}]
+let billing = [];           // 當月應收（米豆繳費單）[{name,due,bills}]
+let pending = [];           // 待認款項 [{d,amt,last5,memo}]
 const ROSTER_PATH = 'roster/list.json';
+const PEND_PATH = 'pending/list.json';
 const billPath = m => 'billing/' + m + '.json';
 let reimb = [];             // [{no,d,payer,tax,items:[{name,amt,inv,note}],total,status}]
 let fixedData = { items: [], paid: {} };  // items:[{name,day,amt,tax,method}] paid:{'YYYY-MM':{名稱:true}}
@@ -422,13 +429,13 @@ function renderBilling() {
     return;
   }
   let paid = 0, mismatch = 0, unpaid = 0, needInv = 0;
-  t.innerHTML = '<tr><th>學生</th><th>應繳</th><th>已收</th><th>狀態</th><th>發票(米豆)</th></tr>' +
+  t.innerHTML = '<tr><th>學生</th><th>帳單編號(米豆)</th><th>應繳</th><th>已收</th><th>狀態</th><th>發票(米豆)</th></tr>' +
     billing.map(b => {
       const s = billStatus(b);
       if (s.txt === '✅繳齊') { paid++; if (!s.invs) needInv++; }
       else if (!s.recv) unpaid++;
       else mismatch++;
-      return `<tr class="${s.cls}"><td class="l">${esc(b.name)}</td><td class="num">${NT(b.due)}</td><td class="num">${s.recv ? NT(s.recv) : '—'}</td><td>${s.txt}</td><td>${esc(s.invs) || (s.recv ? '<span style="color:#af601a">未開</span>' : '—')}</td></tr>`;
+      return `<tr class="${s.cls}"><td class="l">${esc(b.name)}</td><td style="font-size:11.5px;color:#567">${esc((b.bills || []).join(' '))||'—'}</td><td class="num">${NT(b.due)}</td><td class="num">${s.recv ? NT(s.recv) : '—'}</td><td>${s.txt}</td><td>${esc(s.invs) || (s.recv ? '<span style="color:#af601a">未開</span>' : '—')}</td></tr>`;
     }).join('');
   document.getElementById('billInfo').innerHTML =
     `應收 <b>${billing.length}</b> 位：✅繳齊 ${paid}、未繳 ${unpaid}` +
@@ -473,6 +480,33 @@ document.getElementById('copyInvList').onclick = () => {
     document.getElementById('copyMsg').textContent = `已複製 ${rows.length} 位（姓名+帳單編號+金額+後五碼+入帳日），帳單編號貼米豆「輸入繳費單號」直接查`;
   });
 };
+
+/* ===== 待認款項（存雲端） ===== */
+function savePending() { markDirty('pend', PEND_PATH, () => pending); }
+function renderPending() {
+  const t = document.getElementById('pendTable');
+  if (!pending.length) { t.innerHTML = '<tr><td style="color:#789">目前沒有待認款項 🎉</td></tr>'; return; }
+  t.innerHTML = '<tr><th>日期</th><th>金額</th><th>後五碼</th><th>備註/線索</th><th>操作</th></tr>' +
+    pending.map((p, i) => `<tr class="bad"><td>${esc(p.d)}</td><td class="num">${NT(p.amt)}</td><td>${esc(p.last5)}</td><td class="l">${esc(p.memo)}</td>
+      <td><button class="btn sm green" data-a="claim" data-i="${i}">認領入帳</button> <button class="del" data-a="del" data-i="${i}">✕</button></td></tr>`).join('');
+  t.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const i = +b.dataset.i, p = pending[i];
+    if (b.dataset.a === 'del') { if (!confirm('確定移除？（表示這筆不是學費）')) return; pending.splice(i, 1); renderPending(); savePending(); return; }
+    const name = prompt(`這筆 ${NT(p.amt)}（後五碼 ${p.last5}）是哪位學生？\n（兄弟姊妹合繳請分兩次認領，各填各的金額）`);
+    if (!name || !name.trim()) return;
+    let amt = p.amt;
+    const a2 = prompt('入帳金額（合繳拆帳時改成這位學生的部分）', String(p.amt));
+    if (a2 === null) return;
+    amt = +a2 || p.amt;
+    income.push({ d: p.d, name: name.trim(), amt, last5: p.last5, tax: ENTITIES[0].tax, st: 'ok', inv: '', note: amt !== p.amt ? `合繳${p.amt}拆帳` : '' });
+    if (p.last5 && !rosterFind(p.last5) && confirm(`把「${name.trim()}＝${p.last5}」存進名冊，下次自動認得？`)) {
+      roster.push({ name: name.trim(), last5: p.last5, tax: ENTITIES[0].tax }); renderRoster(); saveRoster();
+    }
+    if (amt >= p.amt) pending.splice(i, 1);
+    else p.amt -= amt;   /* 拆帳：剩下的留著給另一位認領 */
+    renderIncome(); saveIncome(); renderPending(); savePending();
+  });
+}
 
 /* ===== 收入帳 ===== */
 const incMonth = document.getElementById('incMonth');
@@ -658,9 +692,14 @@ async function commitParsed() {
     let ro = 0;
     rows.forEach(p => { if (!p.known && p.addRoster && !rosterFind(p.last5)) { roster.push({ name: p.name, last5: p.last5, tax: p.tax }); ro++; } });
     if (ro) { await cloudPut(ROSTER_PATH, roster); renderRoster(); }
+    /* 沒入帳的（且不是重複的）自動存進「待認款項」 */
+    const left = parsed.filter(p => !p.sel && !p.dup)
+      .filter(p => !pending.some(q => q.d === p.d && q.amt === p.amt && q.last5 === p.last5))
+      .map(p => ({ d: p.d, amt: p.amt, last5: p.last5, memo: (p.known ? p.name + '？' : '') + (p.line || '').replace(/[\d,]{4,}/g, '').slice(0, 40) }));
+    if (left.length) { pending.push(...left); await cloudPut(PEND_PATH, pending); renderPending(); }
     renderIncome();
     document.getElementById('parsePreview').innerHTML =
-      `<p style="color:#1e8449;font-size:14px">🎉 已入帳 ${rows.length} 筆` + (ro ? `，並把 ${ro} 位新家長存進名冊` : '') + `。下一步：到「本月收入帳」把發票開一開（有橘色「開發票」按鈕的就是還沒開的）。</p>`;
+      `<p style="color:#1e8449;font-size:14px">🎉 已入帳 ${rows.length} 筆` + (ro ? `，並把 ${ro} 位新家長存進名冊` : '') + (left.length ? `；另有 ${left.length} 筆存進「待認款項」等認領` : '') + `。</p>`;
     document.getElementById('bankPaste').value = '';
     parsed = [];
   } catch (e) {
@@ -899,9 +938,9 @@ async function boot() {
   document.getElementById('rbD').value = todayStr();
   renderRbDraft();
   try {
-    const [rb, fx, ro] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), loadIncome(), loadPayroll(), loadBilling()]);
-    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || [];
-    renderReimb(); renderFixed(); renderRoster();
+    const [rb, fx, ro, pd] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), cloudGet(PEND_PATH), loadIncome(), loadPayroll(), loadBilling()]);
+    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || []; pending = pd || [];
+    renderReimb(); renderFixed(); renderRoster(); renderPending();
   } catch (e) { if (e.message !== 'expired') alert('資料載入失敗：' + e.message); }
 }
 
