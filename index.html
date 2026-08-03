@@ -144,7 +144,7 @@
     </details>
     <table class="ledger" id="billTable" style="margin-top:10px"></table>
     <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-      <button class="btn sm orange" id="copyInvList">📋 複製「待開發票」清單（拿去米豆開票）</button>
+      <button class="btn sm orange" id="copyInvList">📋 複製「待銷帳」清單（姓名+金額+後五碼，拿去米豆按繳費）</button>
       <span id="copyMsg" style="font-size:12.5px;color:#1e8449"></span>
     </div>
   </div>
@@ -162,7 +162,7 @@
   </div>
   <div class="card">
     <div class="monthpick">月份：<input type="month" id="incMonth"></div>
-    <h2>本月收入帳（入帳後記得開發票）</h2>
+    <h2>本月收入帳（入帳後記得去米豆銷帳，收據＋發票會一起產出）</h2>
     <div id="invSummary" class="hint"></div>
     <table class="ledger" id="incTable"></table>
   </div>
@@ -449,10 +449,16 @@ document.getElementById('billImport').onclick = () => {
 };
 document.getElementById('copyInvList').onclick = () => {
   const rows = billing.filter(b => { const s = billStatus(b); return s.txt === '✅繳齊' && !s.invs; });
-  if (!rows.length) return document.getElementById('copyMsg').textContent = '目前沒有「已繳齊但未開發票」的學生';
-  const text = rows.map(b => b.name + '\t' + b.due).join('\n');
+  if (!rows.length) return document.getElementById('copyMsg').textContent = '目前沒有「已繳齊但還沒銷帳」的學生';
+  /* 米豆銷帳要登錄後五碼，所以清單附上：姓名、金額、後五碼、入帳日 */
+  const text = rows.map(b => {
+    const pays = income.filter(r => r.name === b.name);
+    const l5 = pays.map(r => r.last5).filter(Boolean).join('/') || '(現金)';
+    const dates = [...new Set(pays.map(r => r.d))].join('/');
+    return [b.name, b.due, l5, dates].join('\t');
+  }).join('\n');
   navigator.clipboard.writeText(text).then(() => {
-    document.getElementById('copyMsg').textContent = `已複製 ${rows.length} 位（姓名+金額），可貼給米豆開票流程`;
+    document.getElementById('copyMsg').textContent = `已複製 ${rows.length} 位（姓名+金額+後五碼+入帳日），拿去米豆逐筆按繳費銷帳`;
   });
 };
 
@@ -477,7 +483,7 @@ function renderIncome() {
   t.querySelectorAll('[data-inv]').forEach(el => el.onclick = e => {
     e.preventDefault();
     const i = +el.dataset.inv;
-    const v = prompt('發票號碼（在米豆開立後貼回，例 BS12345678；清空可取消）', income[i].inv || '');
+    const v = prompt('發票號碼（米豆銷帳後會連收據一起產出，把發票號碼貼回這裡；清空可取消）', income[i].inv || '');
     if (v === null) return;
     income[i].inv = v.trim();
     renderIncome(); saveIncome();
