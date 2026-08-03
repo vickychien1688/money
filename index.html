@@ -222,6 +222,29 @@
 <section class="tab" id="tab-payroll">
   <div class="card">
     <div class="monthpick">月份：<input type="month" id="pyMonth"></div>
+    <h2>⏱ PT 老師薪資計算（時薪 × 時數自動算）</h2>
+    <div id="ptInfo" class="hint"></div>
+    <details>
+      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">👩‍🏫 老師設定（時薪與班表，設定一次就好）</summary>
+      <table class="ledger" id="ptTeachers" style="margin-top:8px"></table>
+      <div class="frm" style="margin-top:10px">
+        <label>姓名<input id="ptName" class="w-m"></label>
+        <label>時薪<input id="ptRate" type="number" class="w-s"></label>
+        <label>模式<select id="ptMode" style="padding:7px;border:1px solid #c6cfda;border-radius:6px"><option value="punch">打卡制</option><option value="fixed">固定班表</option></select></label>
+        <label>固定班表<input id="ptSched" class="w-m" placeholder="一3,三2＝週一3hr週三2hr"></label>
+        <button class="btn green sm" id="ptAddT">＋ 加老師</button>
+      </div>
+    </details>
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📥 匯入本月打卡（打卡制老師用，點開貼上）</summary>
+      <p class="hint" style="margin-top:8px">一行一筆，兩種格式都可以：「姓名 8/5 13:00 17:30」（自動算時數）或「姓名 8/5 4.5」（直接給時數）。重新匯入會取代本月打卡。</p>
+      <textarea id="ptPunch" style="width:100%;min-height:90px" placeholder="小美 8/5 13:00 17:30&#10;小美 8/7 4.5"></textarea>
+      <div style="margin-top:6px"><button class="btn sm" id="ptImport">匯入打卡</button> <span id="ptMsg" style="font-size:12.5px;color:#1e8449"></span></div>
+    </details>
+    <table class="ledger" id="ptCalc" style="margin-top:12px"></table>
+    <div style="margin-top:10px"><button class="btn green" id="ptWrite">✍ 一鍵寫入本月薪資申報</button></div>
+  </div>
+  <div class="card">
     <h2>新增申報項目</h2>
     <div class="frm">
       <label>員工／項目<input id="pyWho" class="w-m"></label>
@@ -842,6 +865,110 @@ document.getElementById('fxAdd').onclick = () => {
   renderFixed(); markDirty('fx', FX_PATH, () => fixedData);
 };
 
+/* ===== PT 老師時薪計算 ===== */
+let ptTeachers = [];   // [{name,rate,mode:'punch'|'fixed',sched}]  sched 例 '一3,三2'
+let ptHours = {};      // 當月打卡 {老師:[{d,hrs,src}]}
+const PT_PATH = 'payroll/teachers.json';
+const ptHrsPath = m => 'payroll/hours-' + m + '.json';
+const WD = { '日': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
+function fixedHours(sched, month) {   /* '一3,三2' → 當月週一數×3 + 週三數×2 */
+  let total = 0;
+  (sched || '').split(/[,、\s]+/).filter(Boolean).forEach(seg => {
+    const wd = WD[seg[0]]; const h = parseFloat(seg.slice(1));
+    if (wd === undefined || !h) return;
+    const [y, m] = month.split('-').map(Number);
+    const days = new Date(y, m, 0).getDate();
+    for (let d = 1; d <= days; d++) if (new Date(y, m - 1, d).getDay() === wd) total += h;
+  });
+  return total;
+}
+function renderPtTeachers() {
+  const t = document.getElementById('ptTeachers');
+  t.innerHTML = '<tr><th>姓名</th><th>時薪</th><th>模式</th><th>固定班表</th><th></th></tr>' +
+    ptTeachers.map((r, i) => `<tr><td class="l">${esc(r.name)}</td><td class="num">${NT(r.rate)}</td><td>${r.mode === 'fixed' ? '固定班表' : '打卡制'}</td><td>${esc(r.sched || '—')}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`).join('');
+  t.querySelectorAll('.del').forEach(b => b.onclick = () => { ptTeachers.splice(+b.dataset.i, 1); renderPtTeachers(); markDirty('ptT', PT_PATH, () => ptTeachers); renderPtCalc(); });
+}
+document.getElementById('ptAddT').onclick = () => {
+  const r = { name: document.getElementById('ptName').value.trim(), rate: +document.getElementById('ptRate').value,
+    mode: document.getElementById('ptMode').value, sched: document.getElementById('ptSched').value.trim() };
+  if (!r.name || !r.rate) return alert('姓名與時薪必填');
+  if (r.mode === 'fixed' && !r.sched) return alert('固定班表制要填班表（例：一3,三2）');
+  ptTeachers.push(r);
+  ['ptName', 'ptRate', 'ptSched'].forEach(id => document.getElementById(id).value = '');
+  renderPtTeachers(); markDirty('ptT', PT_PATH, () => ptTeachers); renderPtCalc();
+};
+document.getElementById('ptImport').onclick = () => {
+  const m = pyMonth.value;
+  const lines = document.getElementById('ptPunch').value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const agg = {}; let bad = 0;
+  for (const ln of lines) {
+    const toks = ln.split(/[\s,\t]+/);
+    const name = toks[0];
+    const dTok = toks.find(t => /^\d{1,2}\/\d{1,2}$|^\d{4}-\d{2}-\d{2}$/.test(t));
+    const times = toks.filter(t => /^\d{1,2}:\d{2}$/.test(t));
+    let hrs = 0, src = '';
+    if (times.length >= 2) {
+      const mins = t => +t.split(':')[0] * 60 + +t.split(':')[1];
+      hrs = Math.round((mins(times[1]) - mins(times[0])) / 6) / 10;
+      src = times[0] + '-' + times[1];
+    } else {
+      const num = toks.slice(1).find(t => /^\d+(\.\d+)?$/.test(t) && !/\//.test(t));
+      hrs = parseFloat(num); src = '直接時數';
+    }
+    if (!name || !dTok || !hrs || hrs <= 0 || hrs > 16) { bad++; continue; }
+    let d = dTok.includes('-') ? dTok : m.slice(0, 4) + '-' + dTok.split('/')[0].padStart(2, '0') + '-' + dTok.split('/')[1].padStart(2, '0');
+    (agg[name] = agg[name] || []).push({ d, hrs, src });
+  }
+  if (!Object.keys(agg).length) return alert('沒解析出任何打卡（格式：姓名 8/5 13:00 17:30 或 姓名 8/5 4.5）');
+  Object.assign(ptHours, agg);   /* 匯入的老師整月取代 */
+  for (const n of Object.keys(agg)) ptHours[n] = agg[n];
+  markDirty('ptH', ptHrsPath(m), () => ptHours);
+  document.getElementById('ptMsg').textContent = `匯入 ${Object.keys(agg).length} 位老師、${Object.values(agg).flat().length} 筆打卡` + (bad ? `（${bad} 行看不懂略過）` : '');
+  document.getElementById('ptPunch').value = '';
+  renderPtCalc();
+};
+function ptRows() {
+  const m = pyMonth.value;
+  return ptTeachers.map(t => {
+    const hrs = t.mode === 'fixed' ? fixedHours(t.sched, m)
+      : Math.round(((ptHours[t.name] || []).reduce((s, x) => s + x.hrs, 0)) * 10) / 10;
+    return { name: t.name, rate: t.rate, mode: t.mode, hrs, pay: Math.round(hrs * t.rate) };
+  });
+}
+function renderPtCalc() {
+  const t = document.getElementById('ptCalc');
+  const rows = ptRows();
+  document.getElementById('ptInfo').textContent = ptTeachers.length
+    ? `本月（${pyMonth.value}）自動試算如下；時數可直接改（請假／代課手動調整），確認後一鍵寫入薪資申報。`
+    : '先在下面「老師設定」加入 PT 老師的時薪與模式，之後每月自動算薪水。';
+  if (!rows.length) { t.innerHTML = ''; return; }
+  t.innerHTML = '<tr><th>老師</th><th>模式</th><th>時薪</th><th>時數</th><th>薪資</th></tr>' +
+    rows.map((r, i) => `<tr><td class="l">${esc(r.name)}</td><td>${r.mode === 'fixed' ? '固定班表' : '打卡'}</td><td class="num">${NT(r.rate)}</td>
+      <td><input type="number" step="0.5" data-i="${i}" value="${r.hrs}" style="width:70px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"></td>
+      <td class="num" id="ptPay${i}">${NT(r.pay)}</td></tr>`).join('') +
+    `<tr class="subtotal"><td colspan="4">合計</td><td class="num" id="ptTotal">${NT(rows.reduce((s, r) => s + r.pay, 0))}</td></tr>`;
+  t.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => {
+    const i = +inp.dataset.i; const r = rows[i];
+    r.hrs = +inp.value || 0; r.pay = Math.round(r.hrs * r.rate);
+    document.getElementById('ptPay' + i).textContent = NT(r.pay);
+    document.getElementById('ptTotal').textContent = NT(rows.reduce((s, x) => s + x.pay, 0));
+    t.dataset.rows = JSON.stringify(rows);
+  });
+  t.dataset.rows = JSON.stringify(rows);
+}
+document.getElementById('ptWrite').onclick = () => {
+  const rows = JSON.parse(document.getElementById('ptCalc').dataset.rows || '[]').filter(r => r.pay > 0);
+  if (!rows.length) return alert('沒有可寫入的薪資');
+  if (!confirm(`確定把 ${rows.length} 位 PT 老師的薪資寫入 ${pyMonth.value} 薪資申報？\n` + rows.map(r => `${r.name} ${r.hrs}時×${r.rate}＝${NT(r.pay)}`).join('\n'))) return;
+  rows.forEach(r => payroll.push({ who: r.name, cat: '薪資', amt: r.pay, tax: ENTITIES[0].tax, note: `PT ${r.hrs}時×${r.rate}元`, at: stamp(), by: who() }));
+  renderPayroll(); savePayroll();
+  alert('已寫入！在下方「本月薪資與可申報費用」可以看到。');
+};
+async function loadPt() {
+  ptHours = (await cloudGet(ptHrsPath(pyMonth.value))) || {};
+  renderPtTeachers(); renderPtCalc();
+}
+
 /* ===== 薪資申報 ===== */
 const pyMonth = document.getElementById('pyMonth');
 function renderPayroll() {
@@ -866,7 +993,7 @@ function renderPayroll() {
 }
 function savePayroll() { markDirty('py', pyPath(pyMonth.value), () => payroll); }
 async function loadPayroll() { payroll = (await cloudGet(pyPath(pyMonth.value))) || []; renderPayroll(); }
-pyMonth.onchange = loadPayroll;
+pyMonth.onchange = () => { loadPayroll(); loadPt(); };
 document.getElementById('pyAdd').onclick = () => {
   const r = { who: document.getElementById('pyWho').value.trim(), cat: document.getElementById('pyCat').value,
     amt: +document.getElementById('pyAmt').value, tax: document.getElementById('pyTax').value,
@@ -992,9 +1119,10 @@ async function boot() {
   document.getElementById('rbD').value = todayStr();
   renderRbDraft();
   try {
-    const [rb, fx, ro, pd] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), cloudGet(PEND_PATH), loadIncome(), loadPayroll(), loadBilling()]);
-    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || []; pending = pd || [];
+    const [rb, fx, ro, pd, ptT] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), cloudGet(PEND_PATH), cloudGet(PT_PATH), loadIncome(), loadPayroll(), loadBilling()]);
+    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || []; pending = pd || []; ptTeachers = ptT || [];
     renderReimb(); renderFixed(); renderRoster(); renderPending();
+    await loadPt();
   } catch (e) { if (e.message !== 'expired') alert('資料載入失敗：' + e.message); }
 }
 
