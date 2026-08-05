@@ -222,29 +222,82 @@
 <!-- ============ 薪資申報 ============ -->
 <section class="tab" id="tab-payroll">
   <div class="card">
-    <div class="monthpick">月份：<input type="month" id="pyMonth"></div>
-    <h2>⏱ PT 老師薪資計算（時薪 × 時數自動算）</h2>
-    <div id="ptInfo" class="hint"></div>
-    <details>
-      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">👩‍🏫 老師設定（時薪與班表，設定一次就好）</summary>
-      <table class="ledger" id="ptTeachers" style="margin-top:8px"></table>
-      <div class="frm" style="margin-top:10px">
-        <label>姓名<input id="ptName" class="w-m"></label>
-        <label>時薪<input id="ptRate" type="number" class="w-s"></label>
-        <label>模式<select id="ptMode" style="padding:7px;border:1px solid #c6cfda;border-radius:6px"><option value="punch">打卡制</option><option value="fixed">固定班表</option></select></label>
-        <label>固定班表<input id="ptSched" class="w-m" placeholder="一3,三2＝週一3hr週三2hr"></label>
-        <button class="btn green sm" id="ptAddT">＋ 加老師</button>
-      </div>
-    </details>
-    <details style="margin-top:8px">
-      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📥 匯入本月打卡（打卡制老師用，點開貼上）</summary>
-      <p class="hint" style="margin-top:8px">一行一筆，兩種格式都可以：「姓名 8/5 13:00 17:30」（自動算時數）或「姓名 8/5 4.5」（直接給時數）。重新匯入會取代本月打卡。</p>
+    <div class="monthpick">月份：<input type="month" id="pyMonth">
+      <label class="btn sm" style="cursor:pointer">📂 匯入打卡檔（員工簽到記錄 Excel）<input type="file" id="punchFile" accept=".xlsx,.xls" style="display:none"></label>
+      <span id="punchMsg" style="font-size:12.5px;color:#1e8449"></span></div>
+    <p class="hint">把打卡系統匯出的「員工簽到記錄」Excel 直接選進來，正職的遲到分鐘與 PT 的時數就會自動算好。重新匯入會取代本月打卡。</p>
+    <details style="margin-top:6px">
+      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📥 手動補登打卡（點開貼上）</summary>
+      <p class="hint" style="margin-top:8px">一行一筆，兩種格式都可以：「姓名 8/5 13:00 17:30」（自動算時數）或「姓名 8/5 4.5」（直接給時數）。只會取代貼進來那些人的打卡。</p>
       <textarea id="ptPunch" style="width:100%;min-height:90px" placeholder="小美 8/5 13:00 17:30&#10;小美 8/7 4.5"></textarea>
       <div style="margin-top:6px"><button class="btn sm" id="ptImport">匯入打卡</button> <span id="ptMsg" style="font-size:12.5px;color:#1e8449"></span></div>
     </details>
-    <table class="ledger" id="ptCalc" style="margin-top:12px"></table>
-    <div style="margin-top:10px"><button class="btn green" id="ptWrite">✍ 一鍵寫入本月薪資申報</button></div>
   </div>
+
+  <div class="card">
+    <h2>🧑‍🏫 正職薪資（底薪＋加給－遲到－出缺勤）</h2>
+    <div id="ftInfo" class="hint"></div>
+    <table class="ledger" id="ftTable" style="margin-top:8px"></table>
+    <div style="margin-top:10px">
+      <button class="btn sm" id="ftLate">⏱ 從打卡算遲到（上班前15分要打卡）</button>
+      <button class="btn green" id="ftWrite">✍ 寫入本月薪資申報</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⏱ PT 薪資（打卡時數 × 時薪 ＋ 家教 − 勞保）</h2>
+    <div id="ptInfo" class="hint"></div>
+    <table class="ledger" id="ptCalc" style="margin-top:8px"></table>
+    <div style="margin-top:10px"><button class="btn green" id="ptWrite">✍ 寫入本月薪資申報</button></div>
+  </div>
+
+  <div class="card">
+    <h2>🇬🇧 英文老師薪資（堂數 × 堂費 ＋ 津貼補課 − 勞健保）</h2>
+    <div id="engInfo" class="hint"></div>
+    <div id="engWrap" style="margin-top:8px"></div>
+    <div style="margin-top:10px"><button class="btn green" id="engWrite">✍ 寫入本月薪資申報</button></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary style="cursor:pointer;font-size:15px;font-weight:bold">⚙️ 員工名冊設定（設定一次就好，點開）</summary>
+      <p class="hint" style="margin-top:8px">姓名要跟打卡系統一致；不一致的用「別名」對應（例：陳奕安的別名填 陳弈安）。
+        <label class="btn sm" style="cursor:pointer">📂 匯入名冊 JSON<input type="file" id="staffFile" accept=".json" style="display:none"></label>
+        <span id="staffMsg" style="font-size:12.5px;color:#1e8449"></span></p>
+      <h2 style="margin-top:10px">正職</h2>
+      <table class="ledger" id="stFull"></table>
+      <div class="frm" style="margin-top:8px">
+        <label>姓名<input id="sfName" class="w-s"></label>
+        <label>到職日<input id="sfOnboard" type="date"></label>
+        <label>底薪<input id="sfBase" type="number" class="w-s"></label>
+        <label>職務加給<input id="sfDuty" type="number" class="w-s"></label>
+        <label>上班時間<input id="sfShift" class="w-s" placeholder="14:00"></label>
+        <label>備註<input id="sfNote" class="w-m"></label>
+        <button class="btn green sm" id="sfAdd">＋ 加正職</button>
+      </div>
+      <h2 style="margin-top:14px">PT（時薪制）</h2>
+      <table class="ledger" id="stPt"></table>
+      <div class="frm" style="margin-top:8px">
+        <label>姓名<input id="spName" class="w-s"></label>
+        <label>時薪<input id="spRate" type="number" class="w-s"></label>
+        <label>投保級距<input id="spGrade" type="number" class="w-s" placeholder="11100，沒保留空"></label>
+        <label>別名<input id="spAlias" class="w-m" placeholder="打卡系統用的其他名字，逗號分隔"></label>
+        <button class="btn green sm" id="spAdd">＋ 加 PT</button>
+      </div>
+      <h2 style="margin-top:14px">英文老師（按堂）</h2>
+      <table class="ledger" id="stEng"></table>
+      <div class="frm" style="margin-top:8px">
+        <label>姓名<input id="seName" class="w-s"></label>
+        <label>班級與堂費<input id="seClasses" class="w-l" placeholder="1B:1000, 3A:1000, 活動策畫:800"></label>
+        <label>活動設計津貼<input id="seAllow" type="number" class="w-s" placeholder="1000"></label>
+        <label>投保級距<input id="seGrade" type="number" class="w-s" placeholder="36300，沒保留空"></label>
+        <label>眷屬數<input id="seDeps" type="number" class="w-s" placeholder="0"></label>
+        <label>別名<input id="seAlias" class="w-m"></label>
+        <button class="btn green sm" id="seAdd">＋ 加英文老師</button>
+      </div>
+    </details>
+  </div>
+
   <div class="card">
     <h2>新增申報項目</h2>
     <div class="frm">
@@ -866,37 +919,139 @@ document.getElementById('fxAdd').onclick = () => {
   renderFixed(); markDirty('fx', FX_PATH, () => fixedData);
 };
 
-/* ===== PT 老師時薪計算 ===== */
-let ptTeachers = [];   // [{name,rate,mode:'punch'|'fixed',sched}]  sched 例 '一3,三2'
-let ptHours = {};      // 當月打卡 {老師:[{d,hrs,src}]}
-const PT_PATH = 'payroll/teachers.json';
-const ptHrsPath = m => 'payroll/hours-' + m + '.json';
-const WD = { '日': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
-function fixedHours(sched, month) {   /* '一3,三2' → 當月週一數×3 + 週三數×2 */
-  let total = 0;
-  (sched || '').split(/[,、\s]+/).filter(Boolean).forEach(seg => {
-    const wd = WD[seg[0]]; const h = parseFloat(seg.slice(1));
-    if (wd === undefined || !h) return;
-    const [y, m] = month.split('-').map(Number);
-    const days = new Date(y, m, 0).getDate();
-    for (let d = 1; d <= days; d++) if (new Date(y, m - 1, d).getDay() === wd) total += h;
+/* ===== 員工名冊（正職／PT／英文老師） ===== */
+let staff = { full: [], pt: [], eng: [], makeupRate: 533 };
+let punch = {};      // 當月打卡 {姓名:[{d,in,out,hrs,leave}]}
+let ftRows = [];     // 正職當月試算列
+let ptOv = {};       // PT 當月手動調整 {姓名:{hrs,extra,extraNote,labor}}
+let engData = {};    // 英文當月 {姓名:{cnt,extras,allow,deds}}
+const STAFF_PATH = 'payroll/staff.json';
+const PT_PATH = 'payroll/teachers.json';   /* 舊版 PT 設定，首次自動搬入名冊 */
+const punchPath = m => 'payroll/punch-' + m + '.json';
+const ftPath = m => 'payroll/full-' + m + '.json';
+const ptOvPath = m => 'payroll/pt-' + m + '.json';
+const engPath = m => 'payroll/eng-' + m + '.json';
+const PY_TAX = '00196747';   /* 薪資統一掛有限公司 */
+const R1 = n => Math.round(n * 10) / 10;
+const mins = t => { const p = String(t).split(':'); return +p[0] * 60 + +p[1]; };
+
+/* 勞健保員工負擔（照會計師的級距表：勞保11.5%＋就保1%各取20%分別四捨五入；健保5.17%×30%，級距最低29,500） */
+const laborEmp = g => g ? Math.round(g * 0.115 * 0.2) + Math.round(g * 0.01 * 0.2) : 0;
+const healthEmp = g => g ? Math.round(Math.max(g, 29500) * 0.0517 * 0.3) : 0;
+
+function saveStaff() { const cur = staff; markDirty('staff', STAFF_PATH, () => cur); }
+function canonName(raw) {
+  const n = String(raw || '').trim().toLowerCase();
+  if (!n) return null;
+  for (const g of ['full', 'pt', 'eng']) for (const p of (staff[g] || []))
+    if (p.name.toLowerCase() === n || (p.aliases || []).some(a => String(a).toLowerCase() === n)) return p.name;
+  return null;
+}
+const gv = id => document.getElementById(id).value.trim();
+const gclr = ids => ids.forEach(id => document.getElementById(id).value = '');
+const parseAlias = s => s.split(/[,、\s]+/).map(x => x.trim()).filter(Boolean);
+const parsePairs = s => s.split(/[,、]+/).map(x => x.trim()).filter(Boolean).map(seg => {
+  const p = seg.split(/[:：]/); return { code: p[0].trim(), fee: +(p[1] || 1000) || 1000 };
+});
+
+/* ---- 名冊畫面 ---- */
+function renderStaff() {
+  const f = document.getElementById('stFull');
+  f.innerHTML = '<tr><th>姓名</th><th>到職日</th><th>底薪</th><th>職務加給</th><th>上班時間</th><th>備註</th><th></th></tr>' +
+    staff.full.map((p, i) => `<tr><td class="l">${esc(p.name)}</td><td>${esc(p.onboard || '')}</td><td class="num">${NT(p.base)}</td><td class="num">${NT(p.duty || 0)}</td>
+      <td><input data-i="${i}" data-k="shift" value="${esc(p.shift || '')}" placeholder="14:00" style="width:58px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:center"></td>
+      <td class="l" style="font-size:12px">${esc(p.note || '')}</td><td><button class="del" data-g="full" data-i="${i}">✕</button></td></tr>`).join('');
+  const t = document.getElementById('stPt');
+  t.innerHTML = '<tr><th>姓名</th><th>時薪</th><th>投保級距</th><th>勞保扣額(自動)</th><th>別名</th><th></th></tr>' +
+    staff.pt.map((p, i) => `<tr><td class="l">${esc(p.name)}</td><td class="num">${NT(p.rate)}</td>
+      <td class="num">${p.grade ? Number(p.grade).toLocaleString('zh-TW') : '—'}</td><td class="num">${p.grade ? NT(laborEmp(p.grade)) : '—'}</td>
+      <td class="l" style="font-size:12px">${esc((p.aliases || []).join('、'))}</td><td><button class="del" data-g="pt" data-i="${i}">✕</button></td></tr>`).join('');
+  const e = document.getElementById('stEng');
+  e.innerHTML = '<tr><th>姓名</th><th>班級（堂費）</th><th>津貼</th><th>級距／眷屬</th><th>扣款(自動)</th><th>別名</th><th></th></tr>' +
+    staff.eng.map((p, i) => {
+      const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade)}${p.deps ? '＋眷' + (healthEmp(p.grade) * p.deps) : ''}` : '—';
+      return `<tr><td class="l">${esc(p.name)}</td><td class="l" style="font-size:12px">${esc((p.classes || []).map(c => c.code + (c.fee === 1000 ? '' : '(' + c.fee + ')')).join('、'))}</td>
+      <td class="num">${NT(p.allow || 0)}</td><td class="num">${p.grade ? Number(p.grade).toLocaleString('zh-TW') + (p.deps ? '／' + p.deps + '眷' : '') : '—'}</td>
+      <td class="l" style="font-size:12px">${ded}${(p.extraDeds || []).map(d => '＋' + d.label + d.amt).join('')}</td>
+      <td class="l" style="font-size:12px">${esc((p.aliases || []).join('、'))}</td><td><button class="del" data-g="eng" data-i="${i}">✕</button></td></tr>`;
+    }).join('');
+  document.querySelectorAll('#stFull .del,#stPt .del,#stEng .del').forEach(b => b.onclick = () => {
+    if (!confirm('確定從名冊移除？（已存的各月份薪資不會消失）')) return;
+    staff[b.dataset.g].splice(+b.dataset.i, 1); saveStaff(); renderStaff(); loadMonth();
   });
-  return total;
+  f.querySelectorAll('input[data-k="shift"]').forEach(inp => inp.onchange = () => {
+    staff.full[+inp.dataset.i].shift = inp.value.trim(); saveStaff();
+  });
 }
-function renderPtTeachers() {
-  const t = document.getElementById('ptTeachers');
-  t.innerHTML = '<tr><th>姓名</th><th>時薪</th><th>模式</th><th>固定班表</th><th></th></tr>' +
-    ptTeachers.map((r, i) => `<tr><td class="l">${esc(r.name)}</td><td class="num">${NT(r.rate)}</td><td>${r.mode === 'fixed' ? '固定班表' : '打卡制'}</td><td>${esc(r.sched || '—')}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`).join('');
-  t.querySelectorAll('.del').forEach(b => b.onclick = () => { ptTeachers.splice(+b.dataset.i, 1); renderPtTeachers(); markDirty('ptT', PT_PATH, () => ptTeachers); renderPtCalc(); });
-}
-document.getElementById('ptAddT').onclick = () => {
-  const r = { name: document.getElementById('ptName').value.trim(), rate: +document.getElementById('ptRate').value,
-    mode: document.getElementById('ptMode').value, sched: document.getElementById('ptSched').value.trim() };
-  if (!r.name || !r.rate) return alert('姓名與時薪必填');
-  if (r.mode === 'fixed' && !r.sched) return alert('固定班表制要填班表（例：一3,三2）');
-  ptTeachers.push(r);
-  ['ptName', 'ptRate', 'ptSched'].forEach(id => document.getElementById(id).value = '');
-  renderPtTeachers(); markDirty('ptT', PT_PATH, () => ptTeachers); renderPtCalc();
+document.getElementById('sfAdd').onclick = () => {
+  const p = { name: gv('sfName'), onboard: gv('sfOnboard'), base: +gv('sfBase') || 0, duty: +gv('sfDuty') || 0, shift: gv('sfShift'), note: gv('sfNote'), aliases: [] };
+  if (!p.name || !p.base) return alert('姓名與底薪必填');
+  staff.full.push(p); gclr(['sfName', 'sfOnboard', 'sfBase', 'sfDuty', 'sfShift', 'sfNote']);
+  saveStaff(); renderStaff(); loadMonth();
+};
+document.getElementById('spAdd').onclick = () => {
+  const p = { name: gv('spName'), rate: +gv('spRate') || 0, grade: +gv('spGrade') || 0, aliases: parseAlias(gv('spAlias')) };
+  if (!p.name || !p.rate) return alert('姓名與時薪必填');
+  staff.pt.push(p); gclr(['spName', 'spRate', 'spGrade', 'spAlias']);
+  saveStaff(); renderStaff(); loadMonth();
+};
+document.getElementById('seAdd').onclick = () => {
+  const p = { name: gv('seName'), classes: parsePairs(gv('seClasses')), allow: +gv('seAllow') || 0,
+    grade: +gv('seGrade') || 0, deps: +gv('seDeps') || 0, extraDeds: [], aliases: parseAlias(gv('seAlias')) };
+  if (!p.name || !p.classes.length) return alert('姓名與班級必填');
+  staff.eng.push(p); gclr(['seName', 'seClasses', 'seAllow', 'seGrade', 'seDeps', 'seAlias']);
+  saveStaff(); renderStaff(); loadMonth();
+};
+document.getElementById('staffFile').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return; e.target.value = '';
+  try {
+    const j = JSON.parse(await file.text());
+    if (!j.full || !j.pt || !j.eng) throw new Error('格式不對（要有 full／pt／eng）');
+    if (!confirm(`匯入名冊：正職 ${j.full.length}、PT ${j.pt.length}、英文 ${j.eng.length} 人，會取代現有名冊，確定？`)) return;
+    staff = j; saveStaff(); renderStaff(); await loadMonth();
+    document.getElementById('staffMsg').textContent = '✔ 名冊已匯入';
+  } catch (err) { alert('名冊匯入失敗：' + err.message); }
+};
+
+/* ---- 打卡檔匯入（員工簽到記錄 Excel：每人三列 簽到退／假別／小計） ---- */
+document.getElementById('punchFile').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return; e.target.value = '';
+  const m = pyMonth.value;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+    const hdr = rows[0] || []; const dayCols = {};
+    hdr.forEach((h, c) => { const mt = /^(\d{2})\/(\d{2})/.exec(String(h).trim()); if (mt) dayCols[c] = [mt[1], mt[2]]; });
+    if (!Object.keys(dayCols).length) throw new Error('第一列找不到日期欄（07/01 這種格式）');
+    const out = {}; const unknown = []; let skipped = 0;
+    for (let i = 1; i < rows.length; i++) {
+      if ((rows[i] || [])[1] !== '簽到退') continue;
+      const raw = String(rows[i][0] || '').trim();
+      if (!raw) continue;   /* 沒名字的簽到退列是上一個人的續列，會在下面一起收 */
+      const prows = [rows[i]]; let j = i + 1;
+      while ((rows[j] || [])[1] === '簽到退' && !String((rows[j] || [])[0] || '').trim()) { prows.push(rows[j]); j++; }
+      const lvRow = ((rows[j] || [])[1] === '假別') ? rows[j] : [];
+      const subRow = ((rows[j + 1] || [])[1] === '小計') ? rows[j + 1] : [];
+      const recs = [];
+      for (const c of Object.keys(dayCols)) {
+        const MM = dayCols[c][0], DD = dayCols[c][1];
+        const span = prows.map(pr => String(pr[c] || '').trim()).find(Boolean) || '';
+        const lv = String(lvRow[c] || '').trim();
+        if (!span && !lv) continue;
+        if (m.slice(5, 7) !== MM) { skipped++; continue; }
+        let hrs = parseFloat(subRow[c]); if (isNaN(hrs)) hrs = 0;
+        const mt = /(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})/.exec(span);
+        recs.push({ d: m.slice(0, 4) + '-' + MM + '-' + DD, in: mt ? mt[1] : '', out: mt ? mt[2] : '', hrs, leave: lv });
+      }
+      if (!recs.length) continue;
+      const cn = canonName(raw);
+      if (cn) out[cn] = recs; else unknown.push(raw);
+    }
+    punch = out; const cur = punch; markDirty('punch', punchPath(m), () => cur);
+    document.getElementById('punchMsg').textContent = `✔ 匯入 ${Object.keys(out).length} 人` +
+      (unknown.length ? `；名冊查無（略過）：${unknown.join('、')}` : '') + (skipped ? `；${skipped} 格不是 ${m} 的略過` : '');
+    renderMonth();
+  } catch (err) { alert('打卡檔讀取失敗：' + err.message); }
 };
 document.getElementById('ptImport').onclick = () => {
   const m = pyMonth.value;
@@ -904,71 +1059,248 @@ document.getElementById('ptImport').onclick = () => {
   const agg = {}; let bad = 0;
   for (const ln of lines) {
     const toks = ln.split(/[\s,\t]+/);
-    const name = toks[0];
+    const name = canonName(toks[0]) || toks[0];
     const dTok = toks.find(t => /^\d{1,2}\/\d{1,2}$|^\d{4}-\d{2}-\d{2}$/.test(t));
     const times = toks.filter(t => /^\d{1,2}:\d{2}$/.test(t));
-    let hrs = 0, src = '';
-    if (times.length >= 2) {
-      const mins = t => +t.split(':')[0] * 60 + +t.split(':')[1];
-      hrs = Math.round((mins(times[1]) - mins(times[0])) / 6) / 10;
-      src = times[0] + '-' + times[1];
-    } else {
-      const num = toks.slice(1).find(t => /^\d+(\.\d+)?$/.test(t) && !/\//.test(t));
-      hrs = parseFloat(num); src = '直接時數';
-    }
+    let hrs = 0, tin = '', tout = '';
+    if (times.length >= 2) { hrs = Math.round((mins(times[1]) - mins(times[0])) / 6) / 10; tin = times[0]; tout = times[1]; }
+    else { const num = toks.slice(1).find(t => /^\d+(\.\d+)?$/.test(t) && !/\//.test(t)); hrs = parseFloat(num); }
     if (!name || !dTok || !hrs || hrs <= 0 || hrs > 16) { bad++; continue; }
-    let d = dTok.includes('-') ? dTok : m.slice(0, 4) + '-' + dTok.split('/')[0].padStart(2, '0') + '-' + dTok.split('/')[1].padStart(2, '0');
-    (agg[name] = agg[name] || []).push({ d, hrs, src });
+    const d = dTok.includes('-') ? dTok : m.slice(0, 4) + '-' + dTok.split('/')[0].padStart(2, '0') + '-' + dTok.split('/')[1].padStart(2, '0');
+    (agg[name] = agg[name] || []).push({ d, in: tin, out: tout, hrs, leave: '' });
   }
   if (!Object.keys(agg).length) return alert('沒解析出任何打卡（格式：姓名 8/5 13:00 17:30 或 姓名 8/5 4.5）');
-  Object.assign(ptHours, agg);   /* 匯入的老師整月取代 */
-  for (const n of Object.keys(agg)) ptHours[n] = agg[n];
-  markDirty('ptH', ptHrsPath(m), () => ptHours);
-  document.getElementById('ptMsg').textContent = `匯入 ${Object.keys(agg).length} 位老師、${Object.values(agg).flat().length} 筆打卡` + (bad ? `（${bad} 行看不懂略過）` : '');
+  Object.keys(agg).forEach(n => punch[n] = agg[n]);
+  const cur = punch; markDirty('punch', punchPath(m), () => cur);
+  document.getElementById('ptMsg').textContent = `匯入 ${Object.keys(agg).length} 人、${Object.values(agg).flat().length} 筆` + (bad ? `（${bad} 行看不懂略過）` : '');
   document.getElementById('ptPunch').value = '';
-  renderPtCalc();
+  renderMonth();
 };
-function ptRows() {
-  const m = pyMonth.value;
-  return ptTeachers.map(t => {
-    const hrs = t.mode === 'fixed' ? fixedHours(t.sched, m)
-      : Math.round(((ptHours[t.name] || []).reduce((s, x) => s + x.hrs, 0)) * 10) / 10;
-    return { name: t.name, rate: t.rate, mode: t.mode, hrs, pay: Math.round(hrs * t.rate) };
+
+/* ---- 正職 ---- */
+function ftDefaults() {
+  const mm = pyMonth.value.slice(5, 7);
+  const summer = (mm === '07' || mm === '08') ? 3000 : 0;   /* 正職暑假加給 3000（7、8月自動帶） */
+  return staff.full.map(p => ({ name: p.name, base: p.base, duty: p.duty || 0, summer, perf: 0, extra: 0, extraNote: '', lateMin: 0, late: 0, adj: 0, note: '' }));
+}
+function ftTotal(r) { return (+r.base || 0) + (+r.duty || 0) + (+r.summer || 0) + (+r.perf || 0) + (+r.extra || 0) - (+r.late || 0) + (+r.adj || 0); }
+function saveFt() { const cur = ftRows; markDirty('ft', ftPath(pyMonth.value), () => cur); }
+function renderFt() {
+  const t = document.getElementById('ftTable');
+  document.getElementById('ftInfo').textContent = staff.full.length
+    ? '遲到費率＝(底薪＋職務加給)÷30天÷8時÷60分。「從打卡算遲到」用名冊的上班時間往前推15分計，算完可手改；寒暑假班表不同就直接改分鐘數。'
+    : '先到下方「員工名冊設定」加入正職員工。';
+  if (!ftRows.length) { t.innerHTML = ''; return; }
+  const num = (i, k, w) => `<input type="number" data-i="${i}" data-k="${k}" value="${ftRows[i][k] || ''}" style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right">`;
+  const txt = (i, k, w, ph) => `<input data-i="${i}" data-k="${k}" value="${esc(ftRows[i][k] || '')}" placeholder="${ph || ''}" style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px">`;
+  t.innerHTML = '<tr><th>姓名</th><th>底薪</th><th>職務</th><th>暑假</th><th>績效</th><th>其他課程</th><th>課程備註</th><th>遲到分</th><th>遲到扣</th><th>出缺勤±</th><th>合計</th><th>備註</th></tr>' +
+    ftRows.map((r, i) => `<tr><td class="l">${esc(r.name)}</td><td>${num(i, 'base', 62)}</td><td>${num(i, 'duty', 52)}</td><td>${num(i, 'summer', 52)}</td><td>${num(i, 'perf', 52)}</td>
+      <td>${num(i, 'extra', 56)}</td><td>${txt(i, 'extraNote', 92, 'G7數學4堂')}</td>
+      <td>${num(i, 'lateMin', 46)}</td><td>${num(i, 'late', 52)}</td><td>${num(i, 'adj', 62)}</td>
+      <td class="num" id="ftSum${i}"><b>${NT(ftTotal(r))}</b></td><td>${txt(i, 'note', 100)}</td></tr>`).join('') +
+    `<tr class="subtotal"><td colspan="10">合計</td><td class="num" id="ftGrand">${NT(ftRows.reduce((s, r) => s + ftTotal(r), 0))}</td><td></td></tr>`;
+  t.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
+    const i = +el.dataset.i, k = el.dataset.k, r = ftRows[i];
+    r[k] = (el.type === 'number') ? (+el.value || 0) : el.value;
+    if (k === 'lateMin') {
+      r.late = Math.round(r.lateMin * ((+r.base || 0) + (+r.duty || 0)) / 14400);
+      const lt = el.closest('tr').querySelector('input[data-k="late"]'); if (lt) lt.value = r.late || '';
+    }
+    document.getElementById('ftSum' + i).innerHTML = '<b>' + NT(ftTotal(r)) + '</b>';
+    document.getElementById('ftGrand').textContent = NT(ftRows.reduce((s, x) => s + ftTotal(x), 0));
+    saveFt();
   });
 }
+document.getElementById('ftLate').onclick = () => {
+  let n = 0; const miss = [];
+  ftRows.forEach(r => {
+    const p = staff.full.find(x => x.name === r.name);
+    const recs = punch[r.name] || [];
+    if (!recs.length) return;
+    if (!p || !/^\d{1,2}:\d{2}$/.test(p.shift || '')) { miss.push(r.name); return; }
+    const expect = mins(p.shift) - 15;
+    let lm = 0;
+    recs.forEach(x => { if (x.in) lm += Math.max(0, mins(x.in) - expect); });
+    r.lateMin = lm; r.late = Math.round(lm * ((+r.base || 0) + (+r.duty || 0)) / 14400); n++;
+  });
+  saveFt(); renderFt();
+  alert(`算好 ${n} 人。` + (miss.length ? `\n沒設上班時間算不了：${miss.join('、')}（到名冊填上班時間）` : ''));
+};
+document.getElementById('ftWrite').onclick = () => {
+  const rows = ftRows.filter(r => ftTotal(r) !== 0);
+  if (!rows.length) return alert('沒有可寫入的薪資');
+  if (!confirm(`確定把 ${rows.length} 位正職薪資寫入 ${pyMonth.value} 申報？（會取代上次寫入的正職明細）`)) return;
+  payroll = payroll.filter(r => r.src !== 'ft');
+  rows.forEach(r => {
+    const parts = [];
+    if (+r.duty) parts.push('職務' + r.duty);
+    if (+r.summer) parts.push('暑假' + r.summer);
+    if (+r.perf) parts.push('績效' + r.perf);
+    if (+r.extra) parts.push((r.extraNote || '其他課程') + r.extra);
+    if (+r.late) parts.push('遲到-' + r.late);
+    if (+r.adj) parts.push('出缺勤' + (r.adj > 0 ? '+' : '') + r.adj);
+    if (r.note) parts.push(r.note);
+    payroll.push({ who: r.name, cat: '薪資', amt: ftTotal(r), tax: PY_TAX, note: '正職：底薪' + r.base + (parts.length ? '，' + parts.join('，') : ''), at: stamp(), by: who(), src: 'ft' });
+  });
+  renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
+};
+
+/* ---- PT（打卡時數 × 時薪） ---- */
+function ptRows() {
+  return staff.pt.map(p => {
+    const o = ptOv[p.name] || {};
+    const auto = Math.round((punch[p.name] || []).filter(x => !x.leave).reduce((s, x) => s + (+x.hrs || 0), 0) * 100) / 100;
+    const hrs = (o.hrs != null) ? o.hrs : auto;
+    const extra = +o.extra || 0;
+    const labor = (o.labor != null) ? +o.labor : laborEmp(p.grade);
+    const pay = R1(hrs * p.rate);
+    const net = (pay + extra) > 0 ? R1(pay + extra - labor) : 0;   /* 當月沒薪資就不扣勞保 */
+    return { name: p.name, rate: p.rate, hrs, auto, extra, extraNote: o.extraNote || '', labor, pay, net };
+  });
+}
+function savePtOv() { const cur = ptOv; markDirty('ptov', ptOvPath(pyMonth.value), () => cur); }
 function renderPtCalc() {
   const t = document.getElementById('ptCalc');
+  document.getElementById('ptInfo').textContent = staff.pt.length
+    ? '時數自動吃打卡檔（可手改）；家教等加項填金額＋備註；勞保照名冊級距自動算，可改。'
+    : '先到下方「員工名冊設定」加入 PT。';
   const rows = ptRows();
-  document.getElementById('ptInfo').textContent = ptTeachers.length
-    ? `本月（${pyMonth.value}）自動試算如下；時數可直接改（請假／代課手動調整），確認後一鍵寫入薪資申報。`
-    : '先在下面「老師設定」加入 PT 老師的時薪與模式，之後每月自動算薪水。';
   if (!rows.length) { t.innerHTML = ''; return; }
-  t.innerHTML = '<tr><th>老師</th><th>模式</th><th>時薪</th><th>時數</th><th>薪資</th></tr>' +
-    rows.map((r, i) => `<tr><td class="l">${esc(r.name)}</td><td>${r.mode === 'fixed' ? '固定班表' : '打卡'}</td><td class="num">${NT(r.rate)}</td>
-      <td><input type="number" step="0.5" data-i="${i}" value="${r.hrs}" style="width:70px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"></td>
-      <td class="num" id="ptPay${i}">${NT(r.pay)}</td></tr>`).join('') +
-    `<tr class="subtotal"><td colspan="4">合計</td><td class="num" id="ptTotal">${NT(rows.reduce((s, r) => s + r.pay, 0))}</td></tr>`;
-  t.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => {
-    const i = +inp.dataset.i; const r = rows[i];
-    r.hrs = +inp.value || 0; r.pay = Math.round(r.hrs * r.rate);
-    document.getElementById('ptPay' + i).textContent = NT(r.pay);
-    document.getElementById('ptTotal').textContent = NT(rows.reduce((s, x) => s + x.pay, 0));
-    t.dataset.rows = JSON.stringify(rows);
+  const st = 'padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right';
+  t.innerHTML = '<tr><th>姓名</th><th>時數</th><th>時薪</th><th>薪資</th><th>家教／加項</th><th>加項備註</th><th>勞保−</th><th>匯款</th></tr>' +
+    rows.map((r, i) => `<tr><td class="l">${esc(r.name)}</td>
+      <td><input type="number" step="0.1" data-i="${i}" data-k="hrs" value="${r.hrs}" style="width:64px;${st}">${r.hrs !== r.auto ? '<span style="font-size:11px;color:#e67e22">改</span>' : ''}</td>
+      <td class="num">${NT(r.rate)}</td><td class="num" id="ptPay${i}">${NT(r.pay)}</td>
+      <td><input type="number" data-i="${i}" data-k="extra" value="${r.extra || ''}" style="width:64px;${st}"></td>
+      <td><input data-i="${i}" data-k="extraNote" value="${esc(r.extraNote)}" placeholder="家教4.11.18" style="width:92px;padding:4px;border:1px solid #c6cfda;border-radius:5px"></td>
+      <td><input type="number" data-i="${i}" data-k="labor" value="${r.labor || ''}" style="width:56px;${st}"></td>
+      <td class="num" id="ptNet${i}"><b>${NT(r.net)}</b></td></tr>`).join('') +
+    `<tr class="subtotal"><td colspan="7">合計（匯款）</td><td class="num" id="ptTotal">${NT(R1(rows.reduce((s, r) => s + r.net, 0)))}</td></tr>`;
+  t.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
+    const i = +el.dataset.i, k = el.dataset.k, name = ptRows()[i].name;
+    const o = (ptOv[name] = ptOv[name] || {});
+    if (el.type === 'number') { if (el.value === '') delete o[k]; else o[k] = +el.value; }
+    else o[k] = el.value;
+    savePtOv();
+    const rr = ptRows()[i];
+    document.getElementById('ptPay' + i).textContent = NT(rr.pay);
+    document.getElementById('ptNet' + i).innerHTML = '<b>' + NT(rr.net) + '</b>';
+    document.getElementById('ptTotal').textContent = NT(R1(ptRows().reduce((s, r) => s + r.net, 0)));
   });
-  t.dataset.rows = JSON.stringify(rows);
 }
 document.getElementById('ptWrite').onclick = () => {
-  const rows = JSON.parse(document.getElementById('ptCalc').dataset.rows || '[]').filter(r => r.pay > 0);
+  const rows = ptRows().filter(r => r.net > 0);
   if (!rows.length) return alert('沒有可寫入的薪資');
-  if (!confirm(`確定把 ${rows.length} 位 PT 老師的薪資寫入 ${pyMonth.value} 薪資申報？\n` + rows.map(r => `${r.name} ${r.hrs}時×${r.rate}＝${NT(r.pay)}`).join('\n'))) return;
-  rows.forEach(r => payroll.push({ who: r.name, cat: '薪資', amt: r.pay, tax: ENTITIES[0].tax, note: `PT ${r.hrs}時×${r.rate}元`, at: stamp(), by: who() }));
-  renderPayroll(); savePayroll();
-  alert('已寫入！在下方「本月薪資與可申報費用」可以看到。');
+  if (!confirm(`確定把 ${rows.length} 位 PT 薪資寫入 ${pyMonth.value} 申報？（會取代上次寫入的 PT 明細）\n` + rows.map(r => `${r.name} ${r.hrs}時×${r.rate}＝${NT(r.net)}`).join('\n'))) return;
+  payroll = payroll.filter(r => r.src !== 'pt');
+  rows.forEach(r => payroll.push({ who: r.name, cat: '薪資', amt: r.net, tax: PY_TAX,
+    note: `PT ${r.hrs}時×${r.rate}` + (r.extra ? `＋${r.extraNote || '加項'}${r.extra}` : '') + (r.labor ? `－勞保${r.labor}` : ''), at: stamp(), by: who(), src: 'pt' }));
+  renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
 };
-async function loadPt() {
-  ptHours = (await cloudGet(ptHrsPath(pyMonth.value))) || {};
-  renderPtTeachers(); renderPtCalc();
+
+/* ---- 英文老師（堂數 × 堂費） ---- */
+function engDefaults(p) {
+  const deds = [];
+  if (p.grade) {
+    deds.push({ label: '勞保', amt: laborEmp(p.grade) });
+    deds.push({ label: '健保', amt: healthEmp(p.grade) });
+    if (p.deps) deds.push({ label: '眷屬健保', amt: healthEmp(p.grade) * p.deps });
+  }
+  (p.extraDeds || []).forEach(d => deds.push({ label: d.label, amt: +d.amt || 0 }));
+  return { cnt: {}, extras: [], allow: p.allow || 0, deds };
 }
+function engTotal(p, d) {
+  const sub = (p.classes || []).reduce((s, c) => s + (+d.cnt[c.code] || 0) * c.fee, 0);
+  return sub + (+d.allow || 0) + d.extras.reduce((s, x) => s + (+x.amt || 0), 0) - d.deds.reduce((s, x) => s + (+x.amt || 0), 0);
+}
+function saveEng() { const cur = engData; markDirty('eng', engPath(pyMonth.value), () => cur); }
+function renderEng() {
+  const w = document.getElementById('engWrap');
+  document.getElementById('engInfo').textContent = staff.eng.length
+    ? `每班填當月堂數；補課用「快速加項」自動按時薪 ${staff.makeupRate || 533}（每分鐘 ${Math.round((staff.makeupRate || 533) / 60 * 100) / 100} 元）換算；勞健保照名冊級距自動帶，可改。`
+    : '先到下方「員工名冊設定」加入英文老師。';
+  if (!staff.eng.length) { w.innerHTML = ''; return; }
+  const stn = 'padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right';
+  w.innerHTML = staff.eng.map((p, ti) => {
+    const d = engData[p.name] || engDefaults(p);
+    return `<div style="border:1px solid #dde3ea;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+      <b>${esc(p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin:8px 0">` +
+      (p.classes || []).map(c => `<label style="font-size:12.5px">${esc(c.code)}<span style="color:#888">(${c.fee})</span>
+        <input type="number" data-t="${ti}" data-cls="${esc(c.code)}" value="${d.cnt[c.code] || ''}" placeholder="堂" style="width:46px;${stn}"></label>`).join('') +
+      `</div><div style="font-size:12.5px;line-height:2">` +
+      (d.allow ? `<span style="margin-right:10px;color:#1e8449">津貼 +${NT(d.allow)}</span>` : '') +
+      d.extras.map((x, xi) => `<span style="margin-right:10px;color:#1e8449">${esc(x.label)} +${NT(x.amt)} <button class="del" data-t="${ti}" data-xi="${xi}">✕</button></span>`).join('') +
+      d.deds.map((x, di) => `<span style="margin-right:10px;color:#c0392b">${esc(x.label)} −<input type="number" data-t="${ti}" data-di="${di}" value="${x.amt || ''}" style="width:56px;${stn}"></span>`).join('') +
+      `</div><div style="margin-top:6px;font-size:12.5px">快速加項：
+        <select id="engQt${ti}" style="padding:5px;border:1px solid #c6cfda;border-radius:5px"><option value="makeup">補課(分鐘)</option><option value="sub">代課(金額)</option><option value="merge">併班(金額)</option><option value="other">自訂(金額)</option></select>
+        <input id="engQl${ti}" placeholder="備註" style="width:100px;padding:5px;border:1px solid #c6cfda;border-radius:5px">
+        <input id="engQv${ti}" type="number" placeholder="數值" style="width:66px;${stn}">
+        <button class="btn sm" data-t="${ti}" data-act="qadd">＋ 加</button>
+      </div></div>`;
+  }).join('') +
+    `<div style="text-align:right;font-size:15px;padding:2px 12px">英文老師合計 <b id="engGrand">${NT(staff.eng.reduce((s, p) => s + engTotal(p, engData[p.name] || engDefaults(p)), 0))}</b></div>`;
+  const upd = () => {
+    staff.eng.forEach((p, ti) => { const el = document.getElementById('engSum' + ti); if (el) el.textContent = NT(engTotal(p, engData[p.name])); });
+    const g = document.getElementById('engGrand'); if (g) g.textContent = NT(staff.eng.reduce((s, p) => s + engTotal(p, engData[p.name]), 0));
+  };
+  w.querySelectorAll('input[data-cls]').forEach(el => el.oninput = () => {
+    const p = staff.eng[+el.dataset.t];
+    engData[p.name].cnt[el.dataset.cls] = +el.value || 0; saveEng(); upd();
+  });
+  w.querySelectorAll('input[data-di]').forEach(el => el.oninput = () => {
+    const p = staff.eng[+el.dataset.t];
+    engData[p.name].deds[+el.dataset.di].amt = +el.value || 0; saveEng(); upd();
+  });
+  w.querySelectorAll('button.del[data-xi]').forEach(b => b.onclick = () => {
+    const p = staff.eng[+b.dataset.t];
+    engData[p.name].extras.splice(+b.dataset.xi, 1); saveEng(); renderEng();
+  });
+  w.querySelectorAll('button[data-act="qadd"]').forEach(b => b.onclick = () => {
+    const ti = +b.dataset.t, p = staff.eng[ti], d = engData[p.name];
+    const type = document.getElementById('engQt' + ti).value;
+    const lbl = document.getElementById('engQl' + ti).value.trim();
+    const val = +document.getElementById('engQv' + ti).value;
+    if (!val) return alert('數值必填');
+    let label, amt;
+    if (type === 'makeup') { amt = Math.round(val * (staff.makeupRate || 533) / 60); label = (lbl ? lbl + ' ' : '') + '補課' + val + '分'; }
+    else { amt = val; label = (lbl ? lbl + ' ' : '') + (type === 'sub' ? '代課' : type === 'merge' ? '併班' : '加項'); }
+    d.extras.push({ label, amt }); saveEng(); renderEng();
+  });
+}
+document.getElementById('engWrite').onclick = () => {
+  const rows = staff.eng.map(p => ({ p, d: engData[p.name] })).filter(x => x.d && engTotal(x.p, x.d) !== 0);
+  if (!rows.length) return alert('沒有可寫入的薪資');
+  if (!confirm(`確定把 ${rows.length} 位英文老師薪資寫入 ${pyMonth.value} 申報？（會取代上次寫入的英文明細）`)) return;
+  payroll = payroll.filter(r => r.src !== 'eng');
+  rows.forEach(({ p, d }) => {
+    const parts = [];
+    const cls = (p.classes || []).filter(c => +d.cnt[c.code]).map(c => `${c.code}×${d.cnt[c.code]}`).join('，');
+    if (cls) parts.push(cls);
+    if (+d.allow) parts.push('津貼' + d.allow);
+    d.extras.forEach(x => parts.push(x.label + x.amt));
+    d.deds.forEach(x => { if (+x.amt) parts.push(x.label + '-' + x.amt); });
+    payroll.push({ who: p.name, cat: '薪資', amt: engTotal(p, d), tax: PY_TAX, note: '英文：' + parts.join('，'), at: stamp(), by: who(), src: 'eng' });
+  });
+  renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
+};
+
+/* ---- 當月載入 ---- */
+async function loadMonth() {
+  const m = pyMonth.value;
+  const [pu, ft, po, en] = await Promise.all([cloudGet(punchPath(m)), cloudGet(ftPath(m)), cloudGet(ptOvPath(m)), cloudGet(engPath(m))]);
+  punch = pu || {};
+  ftRows = ftDefaults();
+  (ft || []).forEach(s => {
+    const i = ftRows.findIndex(r => r.name === s.name);
+    if (i >= 0) Object.assign(ftRows[i], s); else ftRows.push(s);
+  });
+  ptOv = po || {};
+  engData = {};
+  staff.eng.forEach(p => { engData[p.name] = Object.assign(engDefaults(p), (en || {})[p.name] || {}); });
+  renderMonth();
+}
+function renderMonth() { renderFt(); renderPtCalc(); renderEng(); }
 
 /* ===== 薪資申報 ===== */
 const pyMonth = document.getElementById('pyMonth');
@@ -994,7 +1326,7 @@ function renderPayroll() {
 }
 function savePayroll() { markDirty('py', pyPath(pyMonth.value), () => payroll); }
 async function loadPayroll() { payroll = (await cloudGet(pyPath(pyMonth.value))) || []; renderPayroll(); }
-pyMonth.onchange = () => { loadPayroll(); loadPt(); };
+pyMonth.onchange = () => { loadPayroll(); loadMonth(); };
 document.getElementById('pyAdd').onclick = () => {
   const r = { who: document.getElementById('pyWho').value.trim(), cat: document.getElementById('pyCat').value,
     amt: +document.getElementById('pyAmt').value, tax: document.getElementById('pyTax').value,
@@ -1169,10 +1501,12 @@ async function boot() {
   document.getElementById('rbD').value = todayStr();
   renderRbDraft();
   try {
-    const [rb, fx, ro, pd, ptT] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), cloudGet(PEND_PATH), cloudGet(PT_PATH), loadIncome(), loadPayroll(), loadBilling()]);
-    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || []; pending = pd || []; ptTeachers = ptT || [];
-    renderReimb(); renderFixed(); renderRoster(); renderPending();
-    await loadPt();
+    const [rb, fx, ro, pd, st, ptOld] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), cloudGet(PEND_PATH), cloudGet(STAFF_PATH), cloudGet(PT_PATH), loadIncome(), loadPayroll(), loadBilling()]);
+    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || []; pending = pd || [];
+    staff = st || { full: [], pt: [], eng: [], makeupRate: 533 };
+    if (!st && ptOld && ptOld.length) { staff.pt = ptOld.map(t => ({ name: t.name, rate: t.rate, grade: 0, aliases: [] })); saveStaff(); }
+    renderReimb(); renderFixed(); renderRoster(); renderPending(); renderStaff();
+    await loadMonth();
   } catch (e) { if (e.message !== 'expired') alert('資料載入失敗：' + e.message); }
 }
 
