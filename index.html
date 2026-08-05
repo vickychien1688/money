@@ -970,7 +970,7 @@ function renderStaff() {
   e.innerHTML = '<tr><th>姓名</th><th>班級（堂費）</th><th>津貼</th><th>級距／眷屬</th><th>扣款(自動)</th><th>別名</th><th></th></tr>' +
     staff.eng.map((p, i) => {
       const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade)}${p.deps ? '＋眷' + (healthEmp(p.grade) * p.deps) : ''}` : '—';
-      return `<tr><td class="l">${esc(p.name)}</td><td class="l" style="font-size:12px">${esc((p.classes || []).map(c => c.code + (c.fee === 1000 ? '' : '(' + c.fee + ')')).join('、'))}</td>
+      return `<tr><td class="l">${esc(p.name)}</td><td><input data-i="${i}" data-k="engcls" value="${esc((p.classes || []).map(c => c.fee === 1000 ? c.code : c.code + ':' + c.fee).join(', '))}" style="width:190px;padding:4px;border:1px solid #c6cfda;border-radius:5px;font-size:12px"></td>
       <td class="num">${NT(p.allow || 0)}</td><td class="num">${p.grade ? Number(p.grade).toLocaleString('zh-TW') + (p.deps ? '／' + p.deps + '眷' : '') : '—'}</td>
       <td class="l" style="font-size:12px">${ded}${(p.extraDeds || []).map(d => '＋' + d.label + d.amt).join('')}</td>
       <td class="l" style="font-size:12px">${esc((p.aliases || []).join('、'))}</td><td><button class="del" data-g="eng" data-i="${i}">✕</button></td></tr>`;
@@ -981,6 +981,12 @@ function renderStaff() {
   });
   f.querySelectorAll('input[data-k="shift"]').forEach(inp => inp.onchange = () => {
     staff.full[+inp.dataset.i].shift = inp.value.trim(); saveStaff();
+  });
+  e.querySelectorAll('input[data-k="engcls"]').forEach(inp => inp.onchange = () => {
+    const p = staff.eng[+inp.dataset.i];
+    const cls = parsePairs(inp.value);
+    if (!cls.length) { alert('班級不能空白（格式：1B, 3A, 活動策畫:800，堂費 1000 可以不寫）'); renderStaff(); return; }
+    p.classes = cls; saveStaff(); loadMonth();
   });
 }
 document.getElementById('sfAdd').onclick = () => {
