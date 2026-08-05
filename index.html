@@ -443,7 +443,7 @@ function markDirty(key, path, getData) {
   saveState.textContent = '⏳ 儲存中…'; saveState.className = 'dirty';
   clearTimeout(saveTimers[key]);
   saveTimers[key] = setTimeout(async () => {
-    try { await cloudPut(path, getData()); saveState.textContent = '✔ 已同步'; saveState.className = ''; }
+    try { await cloudPut(path, getData()); const d = new Date(); saveState.textContent = '✔ 已同步 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); saveState.className = ''; }
     catch (e) { if (e.message !== 'expired') { saveState.textContent = '⚠ 儲存失敗'; saveState.className = 'err'; } }
   }, 1200);
 }
