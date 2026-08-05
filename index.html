@@ -951,8 +951,21 @@ const gv = id => document.getElementById(id).value.trim();
 const gclr = ids => ids.forEach(id => document.getElementById(id).value = '');
 const parseAlias = s => s.split(/[,、\s]+/).map(x => x.trim()).filter(Boolean);
 const parsePairs = s => s.split(/[,、]+/).map(x => x.trim()).filter(Boolean).map(seg => {
-  const p = seg.split(/[:：]/); return { code: p[0].trim(), fee: +(p[1] || 1000) || 1000 };
+  const dm = seg.split(/[@＠]/); const days = (dm[1] || '').trim();
+  const p = dm[0].split(/[:：]/);
+  const o = { code: p[0].trim(), fee: +(p[1] || 1000) || 1000 };
+  if (days) o.days = days;
+  return o;
 });
+const WD = { '日': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
+const WDN = ['日', '一', '二', '三', '四', '五', '六'];
+function schedDates(days, m) {   /* '一四' → 當月所有週一與週四的日期 */
+  const set = new Set(String(days).split('').map(ch => WD[ch]).filter(x => x !== undefined));
+  const [y, mo] = m.split('-').map(Number);
+  const n = new Date(y, mo, 0).getDate(); const out = [];
+  for (let d = 1; d <= n; d++) if (set.has(new Date(y, mo - 1, d).getDay())) out.push(m + '-' + String(d).padStart(2, '0'));
+  return out;
+}
 
 /* ---- 名冊畫面 ---- */
 function renderStaff() {
@@ -970,7 +983,7 @@ function renderStaff() {
   e.innerHTML = '<tr><th>姓名</th><th>班級（堂費）</th><th>津貼</th><th>級距／眷屬</th><th>扣款(自動)</th><th>別名</th><th></th></tr>' +
     staff.eng.map((p, i) => {
       const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade)}${p.deps ? '＋眷' + (healthEmp(p.grade) * p.deps) : ''}` : '—';
-      return `<tr><td class="l">${esc(p.name)}</td><td><input data-i="${i}" data-k="engcls" value="${esc((p.classes || []).map(c => c.fee === 1000 ? c.code : c.code + ':' + c.fee).join(', '))}" style="width:190px;padding:4px;border:1px solid #c6cfda;border-radius:5px;font-size:12px"></td>
+      return `<tr><td class="l">${esc(p.name)}</td><td><input data-i="${i}" data-k="engcls" value="${esc((p.classes || []).map(c => c.code + (c.fee === 1000 ? '' : ':' + c.fee) + (c.days ? '@' + c.days : '')).join(', '))}" style="width:210px;padding:4px;border:1px solid #c6cfda;border-radius:5px;font-size:12px"></td>
       <td class="num">${NT(p.allow || 0)}</td><td class="num">${p.grade ? Number(p.grade).toLocaleString('zh-TW') + (p.deps ? '／' + p.deps + '眷' : '') : '—'}</td>
       <td class="l" style="font-size:12px">${ded}${(p.extraDeds || []).map(d => '＋' + d.label + d.amt).join('')}</td>
       <td class="l" style="font-size:12px">${esc((p.aliases || []).join('、'))}</td><td><button class="del" data-g="eng" data-i="${i}">✕</button></td></tr>`;
@@ -1229,12 +1242,31 @@ function renderEng() {
   const stn = 'padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right';
   w.innerHTML = staff.eng.map((p, ti) => {
     const d = engData[p.name] || engDefaults(p);
+    /* 每班一排整月日曆：有設星期的自動先亮，暑假不規則的直接點亮；堂數＝亮著的天數 */
+    d.sched = d.sched || {};
+    (p.classes || []).forEach(c => {
+      if (!d.sched[c.code]) {
+        d.sched[c.code] = c.days ? schedDates(c.days, pyMonth.value) : [];
+        d.cnt[c.code] = d.sched[c.code].length;
+      }
+    });
+    const [yy, mo] = pyMonth.value.split('-').map(Number);
+    const mdays = new Date(yy, mo, 0).getDate();
     return `<div style="border:1px solid #dde3ea;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-      <b>${esc(p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin:8px 0">` +
-      (p.classes || []).map(c => `<label style="font-size:12.5px">${esc(c.code)}<span style="color:#888">(${c.fee})</span>
-        <input type="number" data-t="${ti}" data-cls="${esc(c.code)}" value="${d.cnt[c.code] || ''}" placeholder="堂" style="width:46px;${stn}"></label>`).join('') +
-      `</div><div style="font-size:12.5px;line-height:2">` +
+      <b>${esc(p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>` +
+      (p.classes || []).map(c => {
+        const on = new Set(d.sched[c.code] || []);
+        let chips = '';
+        for (let dd = 1; dd <= mdays; dd++) {
+          const dt = pyMonth.value + '-' + String(dd).padStart(2, '0');
+          const dow = new Date(yy, mo - 1, dd).getDay();
+          const o = on.has(dt); const wk = (dow === 0 || dow === 6);
+          chips += `<span class="schip" data-t="${ti}" data-cls="${esc(c.code)}" data-d="${dt}" style="cursor:pointer;display:inline-block;margin:1px;padding:2px 5px;border-radius:5px;font-size:11.5px;border:1px solid ${o ? '#7dbb7d' : (wk ? '#eee' : '#ccc')};background:${o ? '#eaf6ea' : (wk ? '#fafafa' : '#f4f4f4')};color:${o ? '#1e6e1e' : (wk ? '#c4c4c4' : '#999')}">${dd}<small>${WDN[dow]}</small></span>`;
+        }
+        return `<div style="margin:6px 0;font-size:12.5px"><b>${esc(c.code)}</b><span style="color:#888">(${c.fee}${c.days ? '·週' + esc(c.days) : ''})</span>
+          <span style="color:#1e6e1e;font-weight:bold">${d.cnt[c.code] || 0} 堂＝${NT((d.cnt[c.code] || 0) * c.fee)}</span><br>${chips}</div>`;
+      }).join('') +
+      `<div style="font-size:12.5px;line-height:2">` +
       (d.allow ? `<span style="margin-right:10px;color:#1e8449">津貼 +${NT(d.allow)}</span>` : '') +
       d.extras.map((x, xi) => `<span style="margin-right:10px;color:#1e8449">${esc(x.label)} +${NT(x.amt)} <button class="del" data-t="${ti}" data-xi="${xi}">✕</button></span>`).join('') +
       d.deds.map((x, di) => `<span style="margin-right:10px;color:#c0392b">${esc(x.label)} −<input type="number" data-t="${ti}" data-di="${di}" value="${x.amt || ''}" style="width:56px;${stn}"></span>`).join('') +
@@ -1243,6 +1275,9 @@ function renderEng() {
         <input id="engQl${ti}" placeholder="備註" style="width:100px;padding:5px;border:1px solid #c6cfda;border-radius:5px">
         <input id="engQv${ti}" type="number" placeholder="數值" style="width:66px;${stn}">
         <button class="btn sm" data-t="${ti}" data-act="qadd">＋ 加</button>
+        　新班級：<input id="engNc${ti}" placeholder="班名" style="width:76px;padding:5px;border:1px solid #c6cfda;border-radius:5px">
+        <input id="engNf${ti}" type="number" placeholder="1000" style="width:60px;${stn}">
+        <button class="btn sm" data-t="${ti}" data-act="addcls">＋ 加班級</button>
       </div></div>`;
   }).join('') +
     `<div style="text-align:right;font-size:15px;padding:2px 12px">英文老師合計 <b id="engGrand">${NT(staff.eng.reduce((s, p) => s + engTotal(p, engData[p.name] || engDefaults(p)), 0))}</b></div>`;
@@ -1250,9 +1285,23 @@ function renderEng() {
     staff.eng.forEach((p, ti) => { const el = document.getElementById('engSum' + ti); if (el) el.textContent = NT(engTotal(p, engData[p.name])); });
     const g = document.getElementById('engGrand'); if (g) g.textContent = NT(staff.eng.reduce((s, p) => s + engTotal(p, engData[p.name]), 0));
   };
-  w.querySelectorAll('input[data-cls]').forEach(el => el.oninput = () => {
-    const p = staff.eng[+el.dataset.t];
-    engData[p.name].cnt[el.dataset.cls] = +el.value || 0; saveEng(); upd();
+  w.querySelectorAll('.schip').forEach(ch => ch.onclick = () => {
+    const p = staff.eng[+ch.dataset.t]; const d = engData[p.name];
+    const code = ch.dataset.cls, dt = ch.dataset.d;
+    const arr = d.sched[code] = d.sched[code] || [];
+    const ix = arr.indexOf(dt);
+    if (ix >= 0) arr.splice(ix, 1); else { arr.push(dt); arr.sort(); }
+    d.cnt[code] = arr.length;
+    saveEng(); renderEng();
+  });
+  w.querySelectorAll('button[data-act="addcls"]').forEach(b => b.onclick = () => {
+    const p = staff.eng[+b.dataset.t];
+    const code = document.getElementById('engNc' + b.dataset.t).value.trim();
+    const fee = +document.getElementById('engNf' + b.dataset.t).value || 1000;
+    if (!code) return alert('班名必填');
+    if ((p.classes || []).some(c => c.code === code)) return alert('已經有同名班級');
+    p.classes.push({ code, fee });
+    saveStaff(); renderEng();
   });
   w.querySelectorAll('input[data-di]').forEach(el => el.oninput = () => {
     const p = staff.eng[+el.dataset.t];
