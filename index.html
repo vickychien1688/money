@@ -1211,6 +1211,12 @@ function dayExpect(name, shift, d) {   /* 某天的應到分鐘數：班表優�
   const st = shiftStart(sv) || ((shift && /^\d{1,2}:\d{2}$/.test(shift)) ? shift : null);
   return st ? mins(st) - earlyBuf() : null;
 }
+function effLate(name, shift, r) {   /* 當天遲到分：手改的優先，否則照班表/名冊自動算 */
+  if (r.lateOv != null) return +r.lateOv || 0;
+  if (!r.in) return 0;
+  const e = dayExpect(name, shift, r.d);
+  return e == null ? 0 : Math.max(0, mins(r.in) - e);
+}
 function punchDetailHtml(name, shift, editable) {
   const recs = punch[name] || [];
   if (!recs.length) return '<span style="color:#999;font-size:12.5px">本月沒有這個人的打卡資料</span>';
@@ -1222,16 +1228,17 @@ function punchDetailHtml(name, shift, editable) {
   let rows = recs.map((r, idx) => {
     const [y, mo, dd] = r.d.split('-').map(Number);
     const dow = WDN[new Date(y, mo - 1, dd).getDay()];
-    const expect = isFT ? dayExpect(name, shift, r.d) : null;
-    const late = (expect != null && r.in) ? Math.max(0, mins(r.in) - expect) : 0;
+    const late = isFT ? effLate(name, shift, r) : 0;
     totLate += late;
     const hrsCell = editable
       ? `<input type="number" step="0.01" data-pd="${esc(name)}" data-pdi="${idx}" value="${r.hrs || 0}" style="width:62px;padding:2px 4px;border:1px solid #c6cfda;border-radius:4px;text-align:right">`
       : (r.hrs || 0);
+    const lateCell = `<input type="number" data-lo="${esc(name)}" data-loi="${idx}" value="${late || ''}" placeholder="0" style="width:54px;padding:2px 4px;border:1px solid ${r.lateOv != null ? '#e67e22' : '#c6cfda'};border-radius:4px;text-align:right;color:#c0392b">` +
+      (r.lateOv != null ? '<span style="font-size:10.5px;color:#e67e22">改</span>' : '');
     return `<tr><td style="${c}">${mo}/${dd}（${dow}）</td><td style="${c};text-align:center">${r.in || '—'}</td><td style="${c};text-align:center">${r.out || '—'}</td>
       <td style="${c};text-align:right">${hrsCell}</td><td style="${c}">${esc(r.leave || '')}</td>` +
       (hasSched ? `<td style="${c};text-align:center">${esc((sched[name] || {})[r.d] || '—')}</td>` : '') +
-      (showLate ? `<td style="${c};text-align:right;color:${late ? '#c0392b' : '#bbb'}">${late || ''}</td>` : '') + '</tr>';
+      (showLate ? `<td style="${c};text-align:right">${lateCell}</td>` : '') + '</tr>';
   }).join('');
   const tot = Math.round(recs.reduce((s, x) => s + (+x.hrs || 0), 0) * 100) / 100;
   return `<table style="border-collapse:collapse"><tr><th style="${c};background:#f0f5fa">日期</th><th style="${c};background:#f0f5fa">上班</th><th style="${c};background:#f0f5fa">下班</th><th style="${c};background:#f0f5fa">時數</th><th style="${c};background:#f0f5fa">假別</th>` +
@@ -1241,7 +1248,7 @@ function punchDetailHtml(name, shift, editable) {
     (hasSched ? `<th style="${c}"></th>` : '') +
     (showLate ? `<th style="${c};text-align:right;color:#c0392b">${totLate || ''}</th>` : '') + '</tr></table>' +
     (!isFT ? '' : (showLate
-      ? `<p style="font-size:11.5px;color:#999;margin:4px 0 0">遲到照${hasSched ? '班表的每日上班時間（沒班表的日子用名冊上班時間' + (shift ? ' ' + esc(shift) : '，沒填就不算') + '）' : `名冊上班時間 ${esc(shift)}`}，${earlyBuf() ? '要提前 15 分打卡' : '暑假不用提早，上班時間'}之後打卡才算遲到；排「假」的日子不算</p>`
+      ? `<p style="font-size:11.5px;color:#999;margin:4px 0 0">遲到照${hasSched ? '班表的每日上班時間（沒班表的日子用名冊上班時間' + (shift ? ' ' + esc(shift) : '，沒填就不算') + '）' : `名冊上班時間 ${esc(shift)}`}，${earlyBuf() ? '要提前 15 分打卡' : '暑假不用提早，上班時間'}之後打卡才算遲到；排「假」的日子不算。<b>遲到分可以直接改</b>（例：換班核准就改成 0），改了遲到扣款自動重算；清空恢復自動</p>`
       : '<p style="font-size:11.5px;color:#999;margin:4px 0 0">沒班表、名冊也沒填上班時間，算不出遲到分</p>'));
 }
 function bindPunchDetail(tbl, getRow, colspan, editable) {
@@ -1262,6 +1269,23 @@ function bindPunchDetail(tbl, getRow, colspan, editable) {
       if (ptOv[nm] && ptOv[nm].hrs != null) { delete ptOv[nm].hrs; savePtOv(); }   /* 改了單日就以明細加總為準 */
       renderPtCalc();
       const again = [...document.querySelectorAll('#ptCalc a[data-det]')].find(x => ptRows()[+x.dataset.det].name === nm);
+      if (again) again.click();
+    });
+    dr.querySelectorAll('input[data-lo]').forEach(el => el.onchange = () => {
+      const nm = el.dataset.lo, ix = +el.dataset.loi;
+      if (!punch[nm] || !punch[nm][ix]) return;
+      if (el.value === '') delete punch[nm][ix].lateOv;
+      else punch[nm][ix].lateOv = Math.max(0, +el.value || 0);
+      const cur = punch; markDirty('punch', punchPath(pyMonth.value), () => cur);
+      const p = staff.full.find(x => x.name === nm) || {};
+      const r = ftRows.find(x => x.name === nm);
+      if (r) {
+        r.lateMin = (punch[nm] || []).reduce((s, x) => s + effLate(nm, p.shift, x), 0);
+        r.late = Math.round(r.lateMin * ((+r.base || 0) + (+r.duty || 0) + (+r.perf || 0) + (+r.summer || 0)) / 14400);
+        saveFt();
+      }
+      renderFt();
+      const again = [...document.querySelectorAll('#ftTable a[data-det]')].find(x => ftRows[+x.dataset.det].name === nm);
       if (again) again.click();
     });
   });
@@ -1311,6 +1335,7 @@ document.getElementById('ftLate').onclick = () => {
     if (!recs.length) return;
     let lm = 0, ok = 0, skip = 0;
     recs.forEach(x => {
+      if (x.lateOv != null) { lm += +x.lateOv || 0; ok++; return; }   /* 手改過的日子照手改的 */
       if (!x.in) return;
       if ((sched[r.name] || {})[x.d] === '假') { ok++; return; }   /* 排假的日子不算遲到 */
       const expect = dayExpect(r.name, p.shift, x.d);
