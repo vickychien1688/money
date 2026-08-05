@@ -271,6 +271,12 @@
   </div>
 
   <div class="card">
+    <h2>🧾 薪資單（發給員工）</h2>
+    <p class="hint">一人一頁，開新視窗後按列印（或「另存為 PDF」），就能發給員工；最下面有簽收欄。內容照上面三區目前的數字帶入。</p>
+    <button class="btn" id="slipExport">🧾 產生本月薪資單</button>
+  </div>
+
+  <div class="card">
     <details>
       <summary style="cursor:pointer;font-size:15px;font-weight:bold">⚙️ 員工名冊設定（設定一次就好，點開）</summary>
       <p class="hint" style="margin-top:8px">姓名填本名（申報用）；打卡系統寫法不同的用「別名」對應（例：陳弈安的別名填 陳奕安）。
@@ -1585,6 +1591,62 @@ document.getElementById('engWrite').onclick = () => {
     payroll.push({ who: p.cname || p.name, cat: '薪資', amt: engTotal(p, d), tax: PY_TAX, note: '英文' + (p.cname ? '(' + p.name + ')' : '') + '：' + parts.join('，'), at: stamp(), by: who(), src: 'eng' });
   });
   renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
+};
+
+/* ---- 薪資單匯出（一人一頁，列印或存 PDF 發給員工） ---- */
+document.getElementById('slipExport').onclick = () => {
+  const m = pyMonth.value; const [yy, mo] = m.split('-');
+  const slips = [];
+  const row = (label, amt, neg) => ((+amt) ? `<tr><td>${label}</td><td style="text-align:right">${neg ? '−' : ''}${Math.abs(+amt).toLocaleString('zh-TW')}</td></tr>` : '');
+  ftRows.forEach(r => {
+    if (!ftTotal(r)) return;
+    slips.push({ name: r.name, type: '正職', total: ftTotal(r), body:
+      row('底薪', r.base) + row('職務加給', r.duty) + row('暑假加給', r.summer) + row('績效', r.perf) +
+      row(esc(r.extraNote || '其他課程'), r.extra) +
+      row('出缺勤調整' + (r.note ? '（' + esc(r.note) + '）' : ''), r.adj, r.adj < 0) +
+      row('遲到扣款（' + (r.lateMin || 0) + ' 分）', r.late, true) +
+      row('勞保', r.labor, true) + row('健保', r.health, true) });
+  });
+  ptRows().forEach(r => {
+    if (r.net <= 0) return;
+    slips.push({ name: r.name, type: 'PT', total: r.net, body:
+      `<tr><td>時數 ${r.hrs} 時 × 時薪 ${r.rate}</td><td style="text-align:right">${r.pay.toLocaleString('zh-TW')}</td></tr>` +
+      row(esc(r.extraNote || '加項'), r.extra) + row('勞保', r.labor, true) });
+  });
+  staff.eng.forEach(p => {
+    const d = engData[p.name]; if (!d) return;
+    const tot = engTotal(p, d); if (!tot) return;
+    let b = (p.classes || []).filter(c => +d.cnt[c.code]).map(c =>
+      `<tr><td>${esc(c.code)}　${d.cnt[c.code]} 堂 × ${c.fee}</td><td style="text-align:right">${(d.cnt[c.code] * c.fee).toLocaleString('zh-TW')}</td></tr>`).join('');
+    b += row('活動設計津貼', d.allow);
+    d.extras.forEach(x => { b += row(esc(x.label), x.amt); });
+    d.deds.forEach(x => { b += row(esc(x.label), x.amt, true); });
+    slips.push({ name: p.cname ? p.cname + '（' + p.name + '）' : p.name, type: '英文老師', total: tot, body: b });
+  });
+  if (!slips.length) return alert('本月沒有薪資資料，先把上面的薪資算好再匯出。');
+  const w = window.open('', '_blank');
+  if (!w) return alert('瀏覽器擋了彈出視窗，請允許這個網站的彈出視窗再按一次。');
+  w.document.write(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>${m} 薪資單</title><style>
+    body{font-family:'PingFang TC','Microsoft JhengHei',sans-serif;margin:0;color:#222}
+    .slip{page-break-after:always;padding:40px 48px;box-sizing:border-box}
+    h1{font-size:19px;text-align:center;margin:0 0 2px}
+    .sub{text-align:center;color:#777;font-size:13px;margin-bottom:14px}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    td{padding:7px 10px;border-bottom:1px solid #e8e8e8}
+    .tot td{border-top:2px solid #333;border-bottom:none;font-weight:bold;font-size:15.5px}
+    .sign{margin-top:36px;font-size:13.5px;color:#555}
+    .np{text-align:center;padding:14px;background:#f6f9fc}
+    @media print{.np{display:none}}
+  </style></head><body>
+  <div class="np"><button onclick="print()" style="padding:8px 22px;font-size:15px;cursor:pointer">🖨 列印／另存 PDF（一人一頁）</button></div>` +
+    slips.map(s => `<div class="slip">
+    <h1>家功場放學趣有限公司　薪資單</h1>
+    <div class="sub">${+yy} 年 ${+mo} 月｜${s.type}</div>
+    <p style="font-size:15px"><b>姓名：${esc(s.name)}</b></p>
+    <table>${s.body}<tr class="tot"><td>實發金額</td><td style="text-align:right">NT$ ${s.total.toLocaleString('zh-TW')}</td></tr></table>
+    <p class="sign">員工簽收：＿＿＿＿＿＿＿＿＿＿　　日期：＿＿＿＿＿＿＿＿</p>
+  </div>`).join('') + '</body></html>');
+  w.document.close();
 };
 
 /* ---- 當月載入 ---- */
