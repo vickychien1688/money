@@ -1111,6 +1111,40 @@ document.getElementById('ptImport').onclick = () => {
   renderMonth();
 };
 
+/* ---- 打卡明細（點名字下方連結展開） ---- */
+function punchDetailHtml(name, shift) {
+  const recs = punch[name] || [];
+  if (!recs.length) return '<span style="color:#999;font-size:12.5px">本月沒有這個人的打卡資料</span>';
+  const expect = (shift && /^\d{1,2}:\d{2}$/.test(shift)) ? mins(shift) - 15 : null;
+  const c = 'border:1px solid #e3e8ee;padding:2px 10px;font-size:12px';
+  let rows = recs.map(r => {
+    const [y, mo, dd] = r.d.split('-').map(Number);
+    const dow = WDN[new Date(y, mo - 1, dd).getDay()];
+    const late = (expect != null && r.in) ? Math.max(0, mins(r.in) - expect) : 0;
+    return `<tr><td style="${c}">${mo}/${dd}（${dow}）</td><td style="${c};text-align:center">${r.in || '—'}</td><td style="${c};text-align:center">${r.out || '—'}</td>
+      <td style="${c};text-align:right">${r.hrs || 0}</td><td style="${c}">${esc(r.leave || '')}</td>` +
+      (expect != null ? `<td style="${c};text-align:right;color:${late ? '#c0392b' : '#bbb'}">${late || ''}</td>` : '') + '</tr>';
+  }).join('');
+  const tot = Math.round(recs.reduce((s, x) => s + (+x.hrs || 0), 0) * 100) / 100;
+  const totLate = (expect != null) ? recs.reduce((s, x) => s + (x.in ? Math.max(0, mins(x.in) - expect) : 0), 0) : null;
+  return `<table style="border-collapse:collapse"><tr><th style="${c};background:#f0f5fa">日期</th><th style="${c};background:#f0f5fa">上班</th><th style="${c};background:#f0f5fa">下班</th><th style="${c};background:#f0f5fa">時數</th><th style="${c};background:#f0f5fa">假別</th>` +
+    (expect != null ? `<th style="${c};background:#f0f5fa">遲到分</th>` : '') + `</tr>${rows}
+    <tr><th style="${c}" colspan="3">合計</th><th style="${c};text-align:right">${tot}</th><th style="${c}"></th>` +
+    (expect != null ? `<th style="${c};text-align:right;color:#c0392b">${totLate || ''}</th>` : '') + '</tr></table>' +
+    (expect == null && shift === undefined ? '' : (expect == null ? '<p style="font-size:11.5px;color:#999;margin:4px 0 0">名冊沒填上班時間，算不出遲到分</p>' : `<p style="font-size:11.5px;color:#999;margin:4px 0 0">上班 ${shift}，${WDN ? '' : ''}前 15 分（${String(Math.floor(expect / 60)).padStart(2, '0')}:${String(expect % 60).padStart(2, '0')}）之後打卡才算遲到</p>`));
+}
+function bindPunchDetail(tbl, getRow, colspan) {
+  tbl.querySelectorAll('a[data-det]').forEach(a => a.onclick = () => {
+    const tr = a.closest('tr');
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains('detrow')) { next.remove(); return; }
+    const info = getRow(+a.dataset.det);
+    const dr = document.createElement('tr'); dr.className = 'detrow';
+    dr.innerHTML = `<td colspan="${colspan}" style="background:#fbfcfe;padding:8px 12px">${punchDetailHtml(info.name, info.shift)}</td>`;
+    tr.after(dr);
+  });
+}
+
 /* ---- 正職 ---- */
 function ftDefaults() {
   const mm = pyMonth.value.slice(5, 7);
@@ -1128,7 +1162,7 @@ function renderFt() {
   const num = (i, k, w) => `<input type="number" data-i="${i}" data-k="${k}" value="${ftRows[i][k] || ''}" style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right">`;
   const txt = (i, k, w, ph) => `<input data-i="${i}" data-k="${k}" value="${esc(ftRows[i][k] || '')}" placeholder="${ph || ''}" style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px">`;
   t.innerHTML = '<tr><th>姓名</th><th>底薪</th><th>職務</th><th>暑假</th><th>績效</th><th>其他課程</th><th>課程備註</th><th>遲到分</th><th>遲到扣</th><th>出缺勤±</th><th>合計</th><th>備註</th></tr>' +
-    ftRows.map((r, i) => `<tr><td class="l">${esc(r.name)}</td><td>${num(i, 'base', 62)}</td><td>${num(i, 'duty', 52)}</td><td>${num(i, 'summer', 52)}</td><td>${num(i, 'perf', 52)}</td>
+    ftRows.map((r, i) => `<tr><td class="l">${esc(r.name)}<br><a data-det="${i}" style="font-size:11px;color:#2980b9;cursor:pointer">打卡明細▾</a></td><td>${num(i, 'base', 62)}</td><td>${num(i, 'duty', 52)}</td><td>${num(i, 'summer', 52)}</td><td>${num(i, 'perf', 52)}</td>
       <td>${num(i, 'extra', 56)}</td><td>${txt(i, 'extraNote', 92, 'G7數學4堂')}</td>
       <td>${num(i, 'lateMin', 46)}</td><td>${num(i, 'late', 52)}</td><td>${num(i, 'adj', 62)}</td>
       <td class="num" id="ftSum${i}"><b>${NT(ftTotal(r))}</b></td><td>${txt(i, 'note', 100)}</td></tr>`).join('') +
@@ -1144,6 +1178,7 @@ function renderFt() {
     document.getElementById('ftGrand').textContent = NT(ftRows.reduce((s, x) => s + ftTotal(x), 0));
     saveFt();
   });
+  bindPunchDetail(t, i => ({ name: ftRows[i].name, shift: (staff.full.find(x => x.name === ftRows[i].name) || {}).shift }), 12);
 }
 document.getElementById('ftLate').onclick = () => {
   let n = 0; const miss = [];
@@ -1202,7 +1237,7 @@ function renderPtCalc() {
   if (!rows.length) { t.innerHTML = ''; return; }
   const st = 'padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right';
   t.innerHTML = '<tr><th>姓名</th><th>時數</th><th>時薪</th><th>薪資</th><th>家教／加項</th><th>加項備註</th><th>勞保−</th><th>匯款</th></tr>' +
-    rows.map((r, i) => `<tr><td class="l">${esc(r.name)}</td>
+    rows.map((r, i) => `<tr><td class="l">${esc(r.name)}<br><a data-det="${i}" style="font-size:11px;color:#2980b9;cursor:pointer">打卡明細▾</a></td>
       <td><input type="number" step="0.1" data-i="${i}" data-k="hrs" value="${r.hrs}" style="width:64px;${st}">${r.hrs !== r.auto ? '<span style="font-size:11px;color:#e67e22">改</span>' : ''}</td>
       <td class="num">${NT(r.rate)}</td><td class="num" id="ptPay${i}">${NT(r.pay)}</td>
       <td><input type="number" data-i="${i}" data-k="extra" value="${r.extra || ''}" style="width:64px;${st}"></td>
@@ -1221,6 +1256,7 @@ function renderPtCalc() {
     document.getElementById('ptNet' + i).innerHTML = '<b>' + NT(rr.net) + '</b>';
     document.getElementById('ptTotal').textContent = NT(R1(ptRows().reduce((s, r) => s + r.net, 0)));
   });
+  bindPunchDetail(t, i => ({ name: ptRows()[i].name }), 8);
 }
 document.getElementById('ptWrite').onclick = () => {
   const rows = ptRows().filter(r => r.net > 0);
@@ -1267,20 +1303,29 @@ function renderEng() {
     });
     const [yy, mo] = pyMonth.value.split('-').map(Number);
     const mdays = new Date(yy, mo, 0).getDate();
+    let dayHdr = '';
+    for (let dd = 1; dd <= mdays; dd++) {
+      const dow = new Date(yy, mo - 1, dd).getDay();
+      const wk = (dow === 0 || dow === 6);
+      dayHdr += `<th style="padding:2px 1px;font-size:10.5px;font-weight:${wk ? 'normal' : 'bold'};text-align:center;min-width:20px;border:1px solid #e3e8ee;background:${wk ? '#f3f3f3' : '#f0f5fa'};color:${wk ? '#bbb' : '#456'}">${dd}<br>${WDN[dow]}</th>`;
+    }
     return `<div style="border:1px solid #dde3ea;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-      <b>${esc(p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>` +
+      <b style="font-size:15px">${esc(p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>
+      <div style="overflow-x:auto;margin:8px 0"><table style="border-collapse:collapse">
+      <tr><th style="text-align:left;font-size:12px;padding:2px 8px;border:1px solid #e3e8ee;background:#f0f5fa">班級</th>${dayHdr}<th style="font-size:11px;padding:2px 5px;border:1px solid #e3e8ee;background:#f0f5fa">堂數</th><th style="font-size:11px;padding:2px 5px;border:1px solid #e3e8ee;background:#f0f5fa">小計</th></tr>` +
       (p.classes || []).map(c => {
         const on = new Set(d.sched[c.code] || []);
-        let chips = '';
+        let cells = '';
         for (let dd = 1; dd <= mdays; dd++) {
           const dt = pyMonth.value + '-' + String(dd).padStart(2, '0');
           const dow = new Date(yy, mo - 1, dd).getDay();
           const o = on.has(dt); const wk = (dow === 0 || dow === 6);
-          chips += `<span class="schip" data-t="${ti}" data-cls="${esc(c.code)}" data-d="${dt}" style="cursor:pointer;display:inline-block;margin:1px;padding:2px 5px;border-radius:5px;font-size:11.5px;border:1px solid ${o ? '#7dbb7d' : (wk ? '#eee' : '#ccc')};background:${o ? '#eaf6ea' : (wk ? '#fafafa' : '#f4f4f4')};color:${o ? '#1e6e1e' : (wk ? '#c4c4c4' : '#999')}">${dd}<small>${WDN[dow]}</small></span>`;
+          cells += `<td class="schip" data-t="${ti}" data-cls="${esc(c.code)}" data-d="${dt}" style="cursor:pointer;min-width:20px;height:25px;border:1px solid #e3e8ee;text-align:center;font-size:12px;background:${o ? '#3f9e6e' : (wk ? '#f7f7f7' : '#fff')};color:#fff">${o ? '✓' : ''}</td>`;
         }
-        return `<div style="margin:6px 0;font-size:12.5px"><b>${esc(c.code)}</b><span style="color:#888">(${c.fee}${c.days ? '·週' + esc(c.days) : ''})</span>
-          <span style="color:#1e6e1e;font-weight:bold">${d.cnt[c.code] || 0} 堂＝${NT((d.cnt[c.code] || 0) * c.fee)}</span><br>${chips}</div>`;
-      }).join('') +
+        return `<tr><td style="font-size:12.5px;padding:2px 8px;white-space:nowrap;border:1px solid #e3e8ee"><b>${esc(c.code)}</b> <span style="color:#888;font-size:11px">${c.fee}${c.days ? '·' + esc(c.days) : ''}</span></td>${cells}
+          <td style="font-size:12.5px;text-align:center;font-weight:bold;color:#1e6e1e;border:1px solid #e3e8ee">${d.cnt[c.code] || 0}</td>
+          <td style="font-size:12.5px;text-align:right;white-space:nowrap;padding:2px 6px;border:1px solid #e3e8ee">${((d.cnt[c.code] || 0) * c.fee).toLocaleString('zh-TW')}</td></tr>`;
+      }).join('') + `</table></div>` +
       `<div style="font-size:12.5px;line-height:2">` +
       (d.allow ? `<span style="margin-right:10px;color:#1e8449">津貼 +${NT(d.allow)}</span>` : '') +
       d.extras.map((x, xi) => `<span style="margin-right:10px;color:#1e8449">${esc(x.label)} +${NT(x.amt)} <button class="del" data-t="${ti}" data-xi="${xi}">✕</button></span>`).join('') +
