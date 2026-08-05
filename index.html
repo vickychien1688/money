@@ -1445,7 +1445,7 @@ function saveEng() { const cur = engData; markDirty('eng', engPath(pyMonth.value
 function renderEng() {
   const w = document.getElementById('engWrap');
   document.getElementById('engInfo').textContent = staff.eng.length
-    ? `每班填當月堂數；補課用「快速加項」自動按時薪 ${staff.makeupRate || 533}（每分鐘 ${Math.round((staff.makeupRate || 533) / 60 * 100) / 100} 元）換算；勞健保照名冊級距自動帶，可改。`
+    ? `每班填當月堂數；點班名可以改班名或堂費（打錯直接改），✕ 可刪班級；補課用「快速加項」自動按時薪 ${staff.makeupRate || 533}（每分鐘 ${Math.round((staff.makeupRate || 533) / 60 * 100) / 100} 元）換算；勞健保照名冊級距自動帶，可改。`
     : '先到下方「員工名冊設定」加入英文老師。';
   if (!staff.eng.length) { w.innerHTML = ''; return; }
   const stn = 'padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right';
@@ -1471,7 +1471,7 @@ function renderEng() {
       <b style="font-size:15px">${esc(p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>
       <div style="overflow-x:auto;margin:8px 0"><table style="border-collapse:collapse">
       <tr><th style="text-align:left;font-size:12px;padding:2px 8px;border:1px solid #e3e8ee;background:#f0f5fa">班級</th>${dayHdr}<th style="font-size:11px;padding:2px 5px;border:1px solid #e3e8ee;background:#f0f5fa">堂數</th><th style="font-size:11px;padding:2px 5px;border:1px solid #e3e8ee;background:#f0f5fa">小計</th></tr>` +
-      (p.classes || []).map(c => {
+      (p.classes || []).map((c, cx) => {
         const on = new Set(d.sched[c.code] || []);
         let cells = '';
         for (let dd = 1; dd <= mdays; dd++) {
@@ -1480,7 +1480,7 @@ function renderEng() {
           const o = on.has(dt); const wk = (dow === 0 || dow === 6);
           cells += `<td class="schip" data-t="${ti}" data-cls="${esc(c.code)}" data-d="${dt}" style="cursor:pointer;min-width:20px;height:25px;border:1px solid #e3e8ee;text-align:center;font-size:12px;background:${o ? '#3f9e6e' : (wk ? '#f7f7f7' : '#fff')};color:#fff">${o ? '✓' : ''}</td>`;
         }
-        return `<tr><td style="font-size:12.5px;padding:2px 8px;white-space:nowrap;border:1px solid #e3e8ee"><b>${esc(c.code)}</b> <span style="color:#888;font-size:11px">${c.fee}${c.days ? '·' + esc(c.days) : ''}</span></td>${cells}
+        return `<tr><td style="font-size:12.5px;padding:2px 8px;white-space:nowrap;border:1px solid #e3e8ee"><b class="clsEdit" data-t="${ti}" data-ci="${cx}" title="點一下改班名或堂費" style="cursor:pointer;border-bottom:1px dashed #2980b9">${esc(c.code)}</b> <span style="color:#888;font-size:11px">${c.fee}${c.days ? '·' + esc(c.days) : ''}</span> <button class="del clsDel" data-t="${ti}" data-ci="${cx}" title="刪除這個班">✕</button></td>${cells}
           <td style="font-size:12.5px;text-align:center;font-weight:bold;color:#1e6e1e;border:1px solid #e3e8ee">${d.cnt[c.code] || 0}</td>
           <td style="font-size:12.5px;text-align:right;white-space:nowrap;padding:2px 6px;border:1px solid #e3e8ee">${((d.cnt[c.code] || 0) * c.fee).toLocaleString('zh-TW')}</td></tr>`;
       }).join('') + `</table></div>` +
@@ -1511,6 +1511,33 @@ function renderEng() {
     if (ix >= 0) arr.splice(ix, 1); else { arr.push(dt); arr.sort(); }
     d.cnt[code] = arr.length;
     saveEng(); renderEng();
+  });
+  w.querySelectorAll('.clsEdit').forEach(el => el.onclick = () => {
+    const ti = +el.dataset.t, ci = +el.dataset.ci;
+    const p = staff.eng[ti], c = p.classes[ci], d = engData[p.name];
+    const nn = prompt('班名（打錯的在這裡改，改好按確定）', c.code);
+    if (nn === null) return;
+    const code = nn.trim();
+    if (!code) return alert('班名不能空白');
+    if (code !== c.code && p.classes.some((x, i) => i !== ci && x.code === code)) return alert('已經有同名班級');
+    const nf = prompt('堂費', c.fee);
+    if (nf !== null && String(nf).trim() !== '') c.fee = +nf || c.fee;
+    if (code !== c.code) {   /* 已點的日曆跟堂數搬到新班名 */
+      if (d.sched && d.sched[c.code]) { d.sched[code] = d.sched[c.code]; delete d.sched[c.code]; }
+      if (d.cnt && d.cnt[c.code] != null) { d.cnt[code] = d.cnt[c.code]; delete d.cnt[c.code]; }
+      c.code = code;
+      saveEng();
+    }
+    saveStaff(); renderEng();
+  });
+  w.querySelectorAll('button.clsDel').forEach(b => b.onclick = () => {
+    const ti = +b.dataset.t, ci = +b.dataset.ci;
+    const p = staff.eng[ti], c = p.classes[ci], d = engData[p.name];
+    if (!confirm(`確定刪除 ${p.name} 的「${c.code}」班？（這班已點的 ${(d.cnt || {})[c.code] || 0} 堂會一起刪掉）`)) return;
+    p.classes.splice(ci, 1);
+    if (d.sched) delete d.sched[c.code];
+    if (d.cnt) delete d.cnt[c.code];
+    saveStaff(); saveEng(); renderEng();
   });
   w.querySelectorAll('button[data-act="addcls"]').forEach(b => b.onclick = () => {
     const p = staff.eng[+b.dataset.t];
