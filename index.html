@@ -302,6 +302,7 @@
       <table class="ledger" id="stEng"></table>
       <div class="frm" style="margin-top:8px">
         <label>姓名<input id="seName" class="w-s"></label>
+        <label>中文名(申報用)<input id="seCname" class="w-s"></label>
         <label>班級與堂費<input id="seClasses" class="w-l" placeholder="1B:1000, 3A:1000, 活動策畫:800"></label>
         <label>活動設計津貼<input id="seAllow" type="number" class="w-s" placeholder="1000"></label>
         <label>投保級距<input id="seGrade" type="number" class="w-s" placeholder="36300，沒保留空"></label>
@@ -1008,10 +1009,11 @@ function renderStaff() {
       <td><input data-g="pt" data-i="${i}" data-k="aliases" value="${esc((p.aliases || []).join('、'))}" placeholder="打卡系統的其他寫法" ${isl(130)}></td>
       <td><button class="del" data-g="pt" data-i="${i}">✕</button></td></tr>`).join('');
   const e = document.getElementById('stEng');
-  e.innerHTML = '<tr><th>姓名</th><th>班級（堂費）</th><th>津貼</th><th>級距</th><th>眷屬</th><th>扣款(自動)</th><th>別名</th><th></th></tr>' +
+  e.innerHTML = '<tr><th>姓名</th><th>中文名(申報用)</th><th>班級（堂費）</th><th>津貼</th><th>級距</th><th>眷屬</th><th>扣款(自動)</th><th>別名</th><th></th></tr>' +
     staff.eng.map((p, i) => {
       const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade)}${p.deps ? '＋眷' + (healthEmp(p.grade) * p.deps) : ''}` : '—';
       return `<tr><td class="l">${esc(p.name)}</td>
+      <td><input data-g="eng" data-i="${i}" data-k="cname" value="${esc(p.cname || '')}" placeholder="給會計師看的" ${isl(88)}></td>
       <td><input data-g="eng" data-i="${i}" data-k="engcls" value="${esc((p.classes || []).map(c => c.code + (c.fee === 1000 ? '' : ':' + c.fee) + (c.days ? '@' + c.days : '')).join(', '))}" ${isl(200)}></td>
       <td><input type="number" data-g="eng" data-i="${i}" data-k="allow" value="${p.allow || ''}" ${ist(56)}></td>
       <td><input type="number" data-g="eng" data-i="${i}" data-k="grade" value="${p.grade || ''}" ${ist(70)}></td>
@@ -1050,10 +1052,10 @@ document.getElementById('spAdd').onclick = () => {
   saveStaff(); renderStaff(); loadMonth();
 };
 document.getElementById('seAdd').onclick = () => {
-  const p = { name: gv('seName'), classes: parsePairs(gv('seClasses')), allow: +gv('seAllow') || 0,
+  const p = { name: gv('seName'), cname: gv('seCname'), classes: parsePairs(gv('seClasses')), allow: +gv('seAllow') || 0,
     grade: +gv('seGrade') || 0, deps: +gv('seDeps') || 0, extraDeds: [], aliases: parseAlias(gv('seAlias')) };
   if (!p.name || !p.classes.length) return alert('姓名與班級必填');
-  staff.eng.push(p); gclr(['seName', 'seClasses', 'seAllow', 'seGrade', 'seDeps', 'seAlias']);
+  staff.eng.push(p); gclr(['seName', 'seCname', 'seClasses', 'seAllow', 'seGrade', 'seDeps', 'seAlias']);
   saveStaff(); renderStaff(); loadMonth();
 };
 document.getElementById('staffFile').onchange = async e => {
@@ -1468,7 +1470,7 @@ function renderEng() {
       dayHdr += `<th style="padding:2px 1px;font-size:10.5px;font-weight:${wk ? 'normal' : 'bold'};text-align:center;min-width:20px;border:1px solid #e3e8ee;background:${wk ? '#f3f3f3' : '#f0f5fa'};color:${wk ? '#bbb' : '#456'}">${dd}<br>${WDN[dow]}</th>`;
     }
     return `<div style="border:1px solid #dde3ea;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-      <b style="font-size:15px">${esc(p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>
+      <b style="font-size:15px">${esc(p.cname ? p.cname + '（' + p.name + '）' : p.name)}</b><span style="float:right;font-size:14.5px">總計 <b id="engSum${ti}">${NT(engTotal(p, d))}</b></span>
       <div style="overflow-x:auto;margin:8px 0"><table style="border-collapse:collapse">
       <tr><th style="text-align:left;font-size:12px;padding:2px 8px;border:1px solid #e3e8ee;background:#f0f5fa">班級</th>${dayHdr}<th style="font-size:11px;padding:2px 5px;border:1px solid #e3e8ee;background:#f0f5fa">堂數</th><th style="font-size:11px;padding:2px 5px;border:1px solid #e3e8ee;background:#f0f5fa">小計</th></tr>` +
       (p.classes || []).map((c, cx) => {
@@ -1580,7 +1582,7 @@ document.getElementById('engWrite').onclick = () => {
     if (+d.allow) parts.push('津貼' + d.allow);
     d.extras.forEach(x => parts.push(x.label + x.amt));
     d.deds.forEach(x => { if (+x.amt) parts.push(x.label + '-' + x.amt); });
-    payroll.push({ who: p.name, cat: '薪資', amt: engTotal(p, d), tax: PY_TAX, note: '英文：' + parts.join('，'), at: stamp(), by: who(), src: 'eng' });
+    payroll.push({ who: p.cname || p.name, cat: '薪資', amt: engTotal(p, d), tax: PY_TAX, note: '英文' + (p.cname ? '(' + p.name + ')' : '') + '：' + parts.join('，'), at: stamp(), by: who(), src: 'eng' });
   });
   renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
 };
