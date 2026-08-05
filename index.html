@@ -1124,17 +1124,20 @@ function earlyBuf() {   /* 學期要提前15分打卡；暑假(7,8月)打卡時�
   const mm = pyMonth.value.slice(5, 7);
   return (mm === '07' || mm === '08') ? 0 : 15;
 }
-function punchDetailHtml(name, shift) {
+function punchDetailHtml(name, shift, editable) {
   const recs = punch[name] || [];
   if (!recs.length) return '<span style="color:#999;font-size:12.5px">本月沒有這個人的打卡資料</span>';
   const expect = (shift && /^\d{1,2}:\d{2}$/.test(shift)) ? mins(shift) - earlyBuf() : null;
   const c = 'border:1px solid #e3e8ee;padding:2px 10px;font-size:12px';
-  let rows = recs.map(r => {
+  let rows = recs.map((r, idx) => {
     const [y, mo, dd] = r.d.split('-').map(Number);
     const dow = WDN[new Date(y, mo - 1, dd).getDay()];
     const late = (expect != null && r.in) ? Math.max(0, mins(r.in) - expect) : 0;
+    const hrsCell = editable
+      ? `<input type="number" step="0.01" data-pd="${esc(name)}" data-pdi="${idx}" value="${r.hrs || 0}" style="width:62px;padding:2px 4px;border:1px solid #c6cfda;border-radius:4px;text-align:right">`
+      : (r.hrs || 0);
     return `<tr><td style="${c}">${mo}/${dd}（${dow}）</td><td style="${c};text-align:center">${r.in || '—'}</td><td style="${c};text-align:center">${r.out || '—'}</td>
-      <td style="${c};text-align:right">${r.hrs || 0}</td><td style="${c}">${esc(r.leave || '')}</td>` +
+      <td style="${c};text-align:right">${hrsCell}</td><td style="${c}">${esc(r.leave || '')}</td>` +
       (expect != null ? `<td style="${c};text-align:right;color:${late ? '#c0392b' : '#bbb'}">${late || ''}</td>` : '') + '</tr>';
   }).join('');
   const tot = Math.round(recs.reduce((s, x) => s + (+x.hrs || 0), 0) * 100) / 100;
@@ -1145,15 +1148,26 @@ function punchDetailHtml(name, shift) {
     (expect != null ? `<th style="${c};text-align:right;color:#c0392b">${totLate || ''}</th>` : '') + '</tr></table>' +
     (expect == null && shift === undefined ? '' : (expect == null ? '<p style="font-size:11.5px;color:#999;margin:4px 0 0">名冊沒填上班時間，算不出遲到分</p>' : `<p style="font-size:11.5px;color:#999;margin:4px 0 0">上班 ${shift}，${earlyBuf() ? `提前 15 分（${String(Math.floor(expect / 60)).padStart(2, '0')}:${String(expect % 60).padStart(2, '0')}）` : '暑假不用提早，上班時間'}之後打卡才算遲到</p>`));
 }
-function bindPunchDetail(tbl, getRow, colspan) {
+function bindPunchDetail(tbl, getRow, colspan, editable) {
   tbl.querySelectorAll('a[data-det]').forEach(a => a.onclick = () => {
     const tr = a.closest('tr');
     const next = tr.nextElementSibling;
     if (next && next.classList.contains('detrow')) { next.remove(); return; }
     const info = getRow(+a.dataset.det);
     const dr = document.createElement('tr'); dr.className = 'detrow';
-    dr.innerHTML = `<td colspan="${colspan}" style="background:#fbfcfe;padding:8px 12px">${punchDetailHtml(info.name, info.shift)}</td>`;
+    dr.innerHTML = `<td colspan="${colspan}" style="background:#fbfcfe;padding:8px 12px">${punchDetailHtml(info.name, info.shift, editable)}` +
+      (editable ? '<p style="font-size:11.5px;color:#999;margin:4px 0 0">時數可以直接改（例：13:52～19:07 要照班表算 5 就改成 5），總時數與薪資會自動重算</p>' : '') + '</td>';
     tr.after(dr);
+    if (editable) dr.querySelectorAll('input[data-pd]').forEach(el => el.onchange = () => {
+      const nm = el.dataset.pd, ix = +el.dataset.pdi;
+      if (!punch[nm] || !punch[nm][ix]) return;
+      punch[nm][ix].hrs = +el.value || 0;
+      const cur = punch; markDirty('punch', punchPath(pyMonth.value), () => cur);
+      if (ptOv[nm] && ptOv[nm].hrs != null) { delete ptOv[nm].hrs; savePtOv(); }   /* 改了單日就以明細加總為準 */
+      renderPtCalc();
+      const again = [...document.querySelectorAll('#ptCalc a[data-det]')].find(x => ptRows()[+x.dataset.det].name === nm);
+      if (again) again.click();
+    });
   });
 }
 
@@ -1271,7 +1285,7 @@ function renderPtCalc() {
     document.getElementById('ptNet' + i).innerHTML = '<b>' + NT(rr.net) + '</b>';
     document.getElementById('ptTotal').textContent = NT(R1(ptRows().reduce((s, r) => s + r.net, 0)));
   });
-  bindPunchDetail(t, i => ({ name: ptRows()[i].name }), 8);
+  bindPunchDetail(t, i => ({ name: ptRows()[i].name }), 8, true);
 }
 document.getElementById('ptWrite').onclick = () => {
   const rows = ptRows().filter(r => r.net > 0);
