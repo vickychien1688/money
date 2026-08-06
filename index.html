@@ -233,12 +233,11 @@
       <div style="margin-top:6px"><button class="btn sm" id="ptImport">匯入打卡</button> <span id="ptMsg" style="font-size:12.5px;color:#1e8449"></span></div>
     </details>
     <details style="margin-top:6px">
-      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📅 暑假班表（照班表算時數，點開貼上）</summary>
-      <p class="hint" style="margin-top:8px">一行一筆：PT 填時段「陳奕安 8/3 08:00-12:00」；正職填班別「黃宜婷 8/3 早班」（早班7:45／一般班8:45／導師值班8:45／晚班10:45／校外教學班8:15）；排休填「假」。貼新的一週會跟已存的合併，同一人同一天以最後貼的為準。</p>
-      <textarea id="schedPaste" style="width:100%;min-height:90px" placeholder="陳奕安 8/3 08:00-12:00&#10;黃宜婷 8/3 早班"></textarea>
+      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📅 暑假班表（算正職遲到＋明細對照用，點開貼上）</summary>
+      <p class="hint" style="margin-top:8px">一行一筆：PT 填時段「陳弈安 8/3 08:00-12:00」；正職填班別「黃宜婷 8/3 早班」（早班7:45／一般班8:45／導師值班8:45／晚班10:45／校外教學班8:15）；排休填「假」。貼新的一週會跟已存的合併。<b>PT 計薪時數一律照打卡</b>（沒打卡不給、有打卡照打卡實際時間；班表只當對照，因為常臨時異動）。</p>
+      <textarea id="schedPaste" style="width:100%;min-height:90px" placeholder="陳弈安 8/3 08:00-12:00&#10;黃宜婷 8/3 早班"></textarea>
       <div style="margin-top:6px">
         <button class="btn sm" id="schedImport">匯入班表</button>
-        <button class="btn sm" id="schedApply">⏱ PT 照班表算時數</button>
         <button class="btn sm" id="schedClear">清空本月班表</button>
         <span id="schedMsg" style="font-size:12.5px;color:#1e8449"></span>
       </div>
@@ -1111,8 +1110,7 @@ document.getElementById('punchFile').onchange = async e => {
     }
     punch = out; const cur = punch; markDirty('punch', punchPath(m), () => cur);
     document.getElementById('punchMsg').textContent = `✔ 匯入 ${Object.keys(out).length} 人` +
-      (unknown.length ? `；名冊查無（略過）：${unknown.join('、')}` : '') + (skipped ? `；${skipped} 格不是 ${m} 的略過` : '') +
-      (Object.keys(sched).length ? '；本月有班表→記得再按一次「PT 照班表算時數」' : '');
+      (unknown.length ? `；名冊查無（略過）：${unknown.join('、')}` : '') + (skipped ? `；${skipped} 格不是 ${m} 的略過` : '');
     renderMonth();
   } catch (err) { alert('打卡檔讀取失敗：' + err.message); }
 };
@@ -1183,30 +1181,7 @@ document.getElementById('schedClear').onclick = () => {
   if (!confirm('確定清空 ' + pyMonth.value + ' 的班表？（已算好的時數不會被改回去）')) return;
   sched = {}; saveSched(); renderSchedInfo(); renderMonth();
 };
-document.getElementById('schedApply').onclick = () => {
-  const names = staff.pt.map(p => p.name).filter(n => sched[n]);
-  if (!names.length) return alert('本月班表裡沒有 PT 的資料，先在上面「匯入班表」。');
-  let chg = 0; const noPunch = [], noSched = [];
-  const md = d => (+d.slice(5, 7)) + '/' + (+d.slice(8));
-  names.forEach(n => {
-    const recs = punch[n] || [];
-    Object.keys(sched[n]).sort().forEach(d => {
-      const mt = /^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/.exec(sched[n][d]);
-      if (!mt) return;   /* 假或班別，跳過 */
-      const h = Math.round((mins(mt[2]) - mins(mt[1])) / 6) / 10;
-      const r = recs.find(x => x.d === d);
-      if (r) { if ((+r.hrs || 0) !== h) chg++; r.hrs = h; }
-      else noPunch.push(`${n} ${md(d)}（班表 ${sched[n][d]}）`);
-    });
-    recs.forEach(r => { if (!sched[n][r.d] && !r.leave && (+r.hrs || 0) > 0) noSched.push(`${n} ${md(r.d)}（打卡 ${r.hrs} 時）`); });
-    if (ptOv[n] && ptOv[n].hrs != null) delete ptOv[n].hrs;   /* 總時數以每日加總為準 */
-  });
-  const cur = punch; markDirty('punch', punchPath(pyMonth.value), () => cur);
-  savePtOv(); renderPtCalc();
-  alert(`照班表改好：${chg} 天的時數有更動。` +
-    (noPunch.length ? `\n\n⚠️ 班表有排但當天沒打卡（沒帶入時數，請人工確認要不要給）：\n${noPunch.join('\n')}` : '') +
-    (noSched.length ? `\n\n⚠️ 有打卡但班表沒排（時數照打卡，請確認）：\n${noSched.join('\n')}` : ''));
-};
+/* PT 計薪一律照打卡（Vicky 2026-08-06 定案：班表常臨時異動，不用班表改時數） */
 
 /* ---- 打卡明細（點名字下方連結展開） ---- */
 function earlyBuf() {   /* 學期要提前15分打卡；暑假(7,8月)打卡時間到上班時間就好 */
@@ -1267,7 +1242,7 @@ function bindPunchDetail(tbl, getRow, colspan, editable) {
     const info = getRow(+a.dataset.det);
     const dr = document.createElement('tr'); dr.className = 'detrow';
     dr.innerHTML = `<td colspan="${colspan}" style="background:#fbfcfe;padding:8px 12px">${punchDetailHtml(info.name, info.shift, editable)}` +
-      (editable ? '<p style="font-size:11.5px;color:#999;margin:4px 0 0">時數可以直接改，總時數與薪資會自動重算；暑假也可以在最上面「暑假班表」一鍵照班表算</p>' : '') + '</td>';
+      (editable ? '<p style="font-size:11.5px;color:#999;margin:4px 0 0">時數一律照打卡；要調整可直接改，總時數與薪資會自動重算</p>' : '') + '</td>';
     tr.after(dr);
     if (editable) dr.querySelectorAll('input[data-pd]').forEach(el => el.onchange = () => {
       const nm = el.dataset.pd, ix = +el.dataset.pdi;
@@ -1397,7 +1372,7 @@ function savePtOv() { const cur = ptOv; markDirty('ptov', ptOvPath(pyMonth.value
 function renderPtCalc() {
   const t = document.getElementById('ptCalc');
   document.getElementById('ptInfo').textContent = staff.pt.length
-    ? '時數自動吃打卡檔（可手改）；暑假先到最上面「暑假班表」匯入班表→按「PT 照班表算時數」；家教等加項填金額＋備註；勞保照名冊級距自動算，可改。'
+    ? '時數一律照打卡（沒打卡不給、有打卡照實際時間；可手改）；家教等加項填金額＋備註；勞保照名冊級距自動算，可改。'
     : '先到下方「員工名冊設定」加入 PT。';
   const rows = ptRows();
   if (!rows.length) { t.innerHTML = ''; return; }
@@ -1618,7 +1593,7 @@ document.getElementById('slipExport').onclick = () => {
           return `<tr><td>${m2}/${d2}（${WDN[new Date(y2, m2 - 1, d2).getDay()]}）</td><td>${x.in || '—'}</td><td>${x.out || '—'}</td><td style="text-align:right">${x.hrs || 0}</td>${hasS ? `<td>${esc((sched[r.name] || {})[x.d] || '—')}</td>` : ''}<td>${esc(x.leave || '')}</td></tr>`;
         }).join('') +
         `<tr><th colspan="3">合計</th><th style="text-align:right">${r.hrs}</th>${hasS ? '<th></th>' : ''}<th></th></tr></table>` +
-        (hasS ? '<p style="font-size:11px;color:#888;margin:3px 0 0">暑假計薪時數以班表為準</p>' : '')
+        (hasS ? '<p style="font-size:11px;color:#888;margin:3px 0 0">計薪時數照實際打卡；班表僅供對照</p>' : '')
       : '';
     slips.push({ name: r.name, type: 'PT', total: r.net, extraTitle: '打卡明細', extra: pd, body:
       `<tr><td>時數 ${r.hrs} 時 × 時薪 ${r.rate}</td><td style="text-align:right">${r.pay.toLocaleString('zh-TW')}</td></tr>` +
