@@ -91,7 +91,7 @@
   .ft-card-total span { display: block; color: #789; font-size: 11px; }
   .ft-card-total b { color: #176b45; font-size: 22px; font-variant-numeric: tabular-nums; }
   .ft-card-body { padding: 14px 16px 16px; }
-  .ft-pay-grid { display: grid; grid-template-columns: repeat(4,minmax(110px,1fr)); gap: 10px; }
+  .ft-pay-grid { display: grid; grid-template-columns: minmax(180px,300px); gap: 10px; }
   .ft-field { display: flex; flex-direction: column; gap: 4px; color: #687b90; font-size: 11.5px; }
   .ft-field input { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #223; font-size: 14px; text-align: right; }
   .ft-section { margin-top: 14px; padding-top: 13px; border-top: 1px solid #edf1f5; }
@@ -99,6 +99,15 @@
   .ft-course-row { display: grid; grid-template-columns: minmax(150px,1fr) 74px 16px 84px 24px; gap: 6px; align-items: center; margin-bottom: 7px; }
   .ft-course-row input { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 8px; }
   .ft-course-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: #567; font-size: 12px; }
+  .ft-allowance-table { overflow: hidden; border: 1px solid #dfe7ef; border-radius: 10px; }
+  .ft-allowance-row { display: grid; grid-template-columns: 145px minmax(180px,1fr) 120px 30px; gap: 8px; align-items: center; padding: 8px 10px; border-top: 1px solid #edf1f5; }
+  .ft-allowance-row:first-child { border-top: 0; }
+  .ft-allowance-head { background: #f6f9fc; color: #718399; font-size: 11px; font-weight: bold; }
+  .ft-allowance-row input { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 8px; }
+  .ft-allowance-row input[type="number"] { text-align: right; }
+  .ft-allowance-label { color: #40566d; font-size: 13px; font-weight: 600; }
+  .ft-allowance-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; color: #567; font-size: 12px; }
+  .ft-allowance-tools b { color: #176b45; font-size: 15px; }
   .ft-adjust { margin-top: 12px; border: 1px solid #e1e7ee; border-radius: 10px; background: #fafbfd; }
   .ft-adjust summary { padding: 9px 11px; cursor: pointer; color: #52677e; font-size: 12.5px; font-weight: bold; }
   .ft-adjust summary span { margin-left: 8px; color: #8796a7; font-weight: normal; }
@@ -114,7 +123,7 @@
   #scheduleLightbox { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.86); display: none; align-items: center; justify-content: center; padding: 18px; }
   #scheduleLightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; background: #fff; }
   #scheduleLightbox button { position: fixed; right: 16px; top: 14px; border: none; border-radius: 20px; width: 38px; height: 38px; font-size: 22px; }
-  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } .payroll-subnav { position: static; } .payroll-subnav .view-note { width: 100%; margin-left: 2px; } .ft-pay-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-adjust-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-course-row { grid-template-columns: 1fr 64px 14px 74px 22px; } }
+  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } .payroll-subnav { position: static; } .payroll-subnav .view-note { width: 100%; margin-left: 2px; } .ft-pay-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-adjust-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-course-row { grid-template-columns: 1fr 64px 14px 74px 22px; } .ft-allowance-head { display: none; } .ft-allowance-row { grid-template-columns: 1fr 1fr 26px; } .ft-allowance-label, .ft-allowance-row input[data-allow-k="name"] { grid-column: 1 / -1; } }
 
   /* ===== 登入 ===== */
   #loginMask { position: fixed; inset: 0; background: #1f3a5f; display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -1708,15 +1717,26 @@ function bindPunchDetail(tbl, getRow, colspan, editable) {
 
 /* ---- 正職 ---- */
 function ftDefaults() {
-  const mm = pyMonth.value.slice(5, 7);
-  const summer = (mm === '07' || mm === '08') ? 3000 : 0;   /* 正職暑假加給 3000（7、8月自動帶） */
-  return staff.full.map(p => ({ name: p.name, base: p.base, duty: p.duty || 0, summer, perf: 0,
-    courseItems: [], extra: 0, extraNote: '', lateMin: 0, late: 0, adj: 0,
+  return staff.full.map(p => ({ name: p.name, base: p.base, duty: p.duty || 0, dutyNote: '', summer: 0, summerNote: '', perf: 0, perfNote: '',
+    allowanceItems: [], courseItems: [], extra: 0, extraNote: '', lateMin: 0, late: 0, adj: 0,
     labor: laborEmp(p.grade), health: healthEmp(p.grade) * (1 + (p.deps || 0)), note: '' }));
 }
 function courseItemPay(x) { return R1((+x.hours || 0) * (+x.rate || 0)); }
 function coursePay(r) { return R1((r.courseItems || []).reduce((s, x) => s + courseItemPay(x), 0)); }
-function ftTotal(r) { return (+r.base || 0) + (+r.duty || 0) + (+r.summer || 0) + (+r.perf || 0) + coursePay(r) + (+r.extra || 0) - (+r.late || 0) + (+r.adj || 0) - (+r.labor || 0) - (+r.health || 0); }
+function allowanceItemsTotal(r) { return R1((r.allowanceItems || []).reduce((s, x) => s + (+x.amount || 0), 0)); }
+function allowanceTotal(r) { return (+r.duty || 0) + (+r.summer || 0) + (+r.perf || 0) + allowanceItemsTotal(r); }
+function normalizeFtRow(r) {
+  r.courseItems = Array.isArray(r.courseItems) ? r.courseItems : [];
+  if (!Array.isArray(r.allowanceItems)) r.allowanceItems = [];
+  if (+r.extra) r.allowanceItems.push({ name: r.extraNote || '其他加給', detail: '', amount: +r.extra });
+  r.extra = 0; r.extraNote = '';
+  r.dutyNote = r.dutyNote || '';
+  r.summerNote = r.summerNote || '';
+  r.perfNote = r.perfNote || (+r.perf ? '114（下）' : '');
+  return r;
+}
+function allowanceDesc(label, note, amount) { return `${label}${note ? '（' + note + '）' : ''}${amount}`; }
+function ftTotal(r) { return (+r.base || 0) + allowanceTotal(r) + coursePay(r) - (+r.late || 0) + (+r.adj || 0) - (+r.labor || 0) - (+r.health || 0); }
 function saveFt() { const cur = ftRows; markDirty('ft', ftPath(pyMonth.value), () => cur); }
 function renderFt() {
   const t = document.getElementById('ftTable');
@@ -1734,7 +1754,23 @@ function renderFt() {
       <div class="ft-card-total"><span>本月實發</span><b id="ftSum${i}">${NT(ftTotal(r))}</b></div>
     </header>
     <div class="ft-card-body">
-      <div class="ft-pay-grid">${field('底薪', i, 'base')}${field('職務加給', i, 'duty')}${field('暑假加給', i, 'summer')}${field('績效獎金', i, 'perf')}</div>
+      <div class="ft-pay-grid">${field('底薪', i, 'base')}</div>
+      <section class="ft-section">
+        <div class="ft-section-title">本月加給明細</div>
+        <div class="ft-allowance-table">
+          <div class="ft-allowance-row ft-allowance-head"><span>加給項目</span><span>明細</span><span style="text-align:right">金額</span><span></span></div>
+          <div class="ft-allowance-row"><span class="ft-allowance-label">職務加給</span>${txt(i, 'dutyNote', '例如：行政主管')} ${num(i, 'duty')}<span></span></div>
+          <div class="ft-allowance-row"><span class="ft-allowance-label">暑假加給</span>${txt(i, 'summerNote', '有發放時再填')} ${num(i, 'summer')}<span></span></div>
+          <div class="ft-allowance-row"><span class="ft-allowance-label">績效獎金</span>${txt(i, 'perfNote', '例如：114（下）')} ${num(i, 'perf')}<span></span></div>
+          ${(r.allowanceItems || []).map((x, j) => `<div class="ft-allowance-row">
+            <input data-i="${i}" data-allow-i="${j}" data-allow-k="name" value="${esc(x.name || '')}" placeholder="加給名稱">
+            <input data-i="${i}" data-allow-i="${j}" data-allow-k="detail" value="${esc(x.detail || '')}" placeholder="明細（選填）">
+            <input type="number" data-i="${i}" data-allow-i="${j}" data-allow-k="amount" value="${x.amount || ''}" placeholder="金額">
+            <button type="button" class="allowance-remove" data-i="${i}" data-allow-i="${j}" aria-label="移除加給" style="border:0;background:none;color:#c0392b;font-size:16px">✕</button>
+          </div>`).join('')}
+        </div>
+        <div class="ft-allowance-tools"><button type="button" class="allowance-add btn sm" data-i="${i}">＋ 新增加給</button><span>加給合計　<b id="ftAllowance${i}">${NT(allowanceTotal(r))}</b></span></div>
+      </section>
       <section class="ft-section">
         <div class="ft-section-title">額外課程</div>
         ${(r.courseItems || []).map((x, j) => `<div class="ft-course-row">
@@ -1748,12 +1784,10 @@ function renderFt() {
       <details class="ft-adjust">
         <summary>調整與扣款 <span>遲到扣 ${NT(r.late || 0)}・勞保 ${NT(r.labor || 0)}・健保 ${NT(r.health || 0)}</span></summary>
         <div class="ft-adjust-grid">
-          ${field('其他加項', i, 'extra')}
-          <label class="ft-field"><span>加項說明</span>${txt(i, 'extraNote', '例如：代課')}</label>
           ${field('遲到分鐘', i, 'lateMin')}${field('遲到扣款', i, 'late')}${field('出缺勤調整', i, 'adj')}${field('勞保', i, 'labor')}${field('健保', i, 'health')}
         </div>
       </details>
-      <label class="ft-field ft-note"><span>內部備註</span>${txt(i, 'note', '選填')}</label>
+      <label class="ft-field ft-note"><span>其他備註（不計入薪資）</span>${txt(i, 'note', '選填')}</label>
     </div>
   </article></td></tr>`).join('') +
     `<tr class="ft-grand"><td>正職實發合計　<span id="ftGrand">${NT(ftRows.reduce((s, r) => s + ftTotal(r), 0))}</span></td></tr>`;
@@ -1772,6 +1806,21 @@ function renderFt() {
     document.getElementById('ftSum' + i).textContent = NT(ftTotal(r));
     document.getElementById('ftGrand').textContent = NT(ftRows.reduce((s, y) => s + ftTotal(y), 0)); saveFt();
   });
+  t.querySelectorAll('.allowance-add').forEach(b => b.onclick = () => {
+    const r = ftRows[+b.dataset.i]; (r.allowanceItems = r.allowanceItems || []).push({ name: '', detail: '', amount: 0 }); saveFt(); renderFt();
+  });
+  t.querySelectorAll('.allowance-remove').forEach(b => b.onclick = () => {
+    const r = ftRows[+b.dataset.i], j = +b.dataset.allowI, x = r.allowanceItems[j] || {};
+    if ((x.name || x.detail || +x.amount) && !confirm(`確定移除 ${x.name || '這筆加給'}？`)) return;
+    r.allowanceItems.splice(j, 1); saveFt(); renderFt();
+  });
+  t.querySelectorAll('input[data-allow-k]').forEach(el => el.oninput = () => {
+    const i = +el.dataset.i, r = ftRows[i], x = r.allowanceItems[+el.dataset.allowI], k = el.dataset.allowK;
+    x[k] = el.type === 'number' ? (+el.value || 0) : el.value;
+    document.getElementById('ftAllowance' + i).textContent = NT(allowanceTotal(r));
+    document.getElementById('ftSum' + i).textContent = NT(ftTotal(r));
+    document.getElementById('ftGrand').textContent = NT(ftRows.reduce((s, y) => s + ftTotal(y), 0)); saveFt();
+  });
   t.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
     const i = +el.dataset.i, k = el.dataset.k, r = ftRows[i];
     r[k] = (el.type === 'number') ? (+el.value || 0) : el.value;
@@ -1779,6 +1828,7 @@ function renderFt() {
       r.late = Math.round((+r.lateMin || 0) * ((+r.base || 0) + (+r.duty || 0) + (+r.perf || 0) + (+r.summer || 0)) / 14400);
       const lt = el.closest('tr').querySelector('input[data-k="late"]'); if (lt) lt.value = r.late || '';
     }
+    if (['duty', 'summer', 'perf'].includes(k)) document.getElementById('ftAllowance' + i).textContent = NT(allowanceTotal(r));
     document.getElementById('ftSum' + i).textContent = NT(ftTotal(r));
     document.getElementById('ftGrand').textContent = NT(ftRows.reduce((s, x) => s + ftTotal(x), 0));
     saveFt();
@@ -1816,11 +1866,11 @@ document.getElementById('ftWrite').onclick = () => {
   payroll = payroll.filter(r => r.src !== 'ft');
   rows.forEach(r => {
     const parts = [];
-    if (+r.duty) parts.push('職務' + r.duty);
-    if (+r.summer) parts.push('暑假' + r.summer);
-    if (+r.perf) parts.push('績效' + r.perf);
+    if (+r.duty) parts.push(allowanceDesc('職務加給', r.dutyNote, r.duty));
+    if (+r.summer) parts.push(allowanceDesc('暑假加給', r.summerNote, r.summer));
+    if (+r.perf) parts.push(allowanceDesc('績效獎金', r.perfNote, r.perf));
+    (r.allowanceItems || []).filter(x => +x.amount).forEach(x => parts.push(`${x.name || '其他加給'}${x.detail ? '（' + x.detail + '）' : ''}${x.amount}`));
     (r.courseItems || []).filter(x => courseItemPay(x)).forEach(x => parts.push(`${x.name || '額外課程'}${x.hours}時×${x.rate}＝${courseItemPay(x)}`));
-    if (+r.extra) parts.push((r.extraNote || '其他課程') + r.extra);
     if (+r.late) parts.push('遲到-' + r.late);
     if (+r.adj) parts.push('出缺勤' + (r.adj > 0 ? '+' : '') + r.adj);
     if (+r.labor) parts.push('勞保-' + r.labor);
@@ -2082,9 +2132,9 @@ document.getElementById('slipExport').onclick = () => {
   ftRows.forEach(r => {
     if (!ftTotal(r)) return;
     slips.push({ name: r.name, type: '正職', total: ftTotal(r), extraTitle: '特休狀態', extra: leaveBlock(r.name), body:
-      row('底薪', r.base) + row('職務加給', r.duty) + row('暑假加給', r.summer) + row('績效', r.perf) +
+      row('底薪', r.base) + row(esc('職務加給' + (r.dutyNote ? '（' + r.dutyNote + '）' : '')), r.duty) + row(esc('暑假加給' + (r.summerNote ? '（' + r.summerNote + '）' : '')), r.summer) + row(esc('績效獎金' + (r.perfNote ? '（' + r.perfNote + '）' : '')), r.perf) +
+      (r.allowanceItems || []).map(x => row(esc((x.name || '其他加給') + (x.detail ? '（' + x.detail + '）' : '')), x.amount)).join('') +
       (r.courseItems || []).map(x => row(`${esc(x.name || '額外課程')} ${x.hours || 0} 時 × ${x.rate || 0}`, courseItemPay(x))).join('') +
-      row(esc(r.extraNote || '其他課程'), r.extra) +
       row('出缺勤調整' + (r.note ? '（' + esc(r.note) + '）' : ''), r.adj, r.adj < 0) +
       row('遲到扣款（' + (r.lateMin || 0) + ' 分）', r.late, true) +
       row('勞保', r.labor, true) + row('健保', r.health, true) });
@@ -2180,6 +2230,7 @@ async function loadMonth() {
     const i = ftRows.findIndex(r => r.name === s.name);
     if (i >= 0) Object.assign(ftRows[i], s); else ftRows.push(s);
   });
+  ftRows.forEach(normalizeFtRow);
   ptOv = po || {};
   engData = {};
   staff.eng.forEach(p => { engData[p.name] = Object.assign(engDefaults(p), (en || {})[p.name] || {}); });
@@ -2260,9 +2311,10 @@ document.getElementById('pyFinalize').onclick = () => {
   payroll = payroll.filter(r => !['ft', 'pt', 'eng'].includes(r.src));
   d.ft.forEach(r => {
     const parts = [];
-    if (+r.duty) parts.push('職務' + r.duty); if (+r.summer) parts.push('暑假' + r.summer); if (+r.perf) parts.push('績效' + r.perf);
+    if (+r.duty) parts.push(allowanceDesc('職務加給', r.dutyNote, r.duty)); if (+r.summer) parts.push(allowanceDesc('暑假加給', r.summerNote, r.summer)); if (+r.perf) parts.push(allowanceDesc('績效獎金', r.perfNote, r.perf));
+    (r.allowanceItems || []).filter(x => +x.amount).forEach(x => parts.push(`${x.name || '其他加給'}${x.detail ? '（' + x.detail + '）' : ''}${x.amount}`));
     (r.courseItems || []).filter(x => courseItemPay(x)).forEach(x => parts.push(`${x.name || '額外課程'}${x.hours}時×${x.rate}＝${courseItemPay(x)}`));
-    if (+r.extra) parts.push((r.extraNote || '其他課程') + r.extra); if (+r.late) parts.push('遲到-' + r.late);
+    if (+r.late) parts.push('遲到-' + r.late);
     if (+r.adj) parts.push('出缺勤' + (r.adj > 0 ? '+' : '') + r.adj); if (+r.labor) parts.push('勞保-' + r.labor); if (+r.health) parts.push('健保-' + r.health); if (r.note) parts.push(r.note);
     payroll.push({ who:r.name, cat:'薪資', amt:ftTotal(r), tax:PY_TAX, note:'正職：底薪' + r.base + (parts.length ? '，' + parts.join('，') : ''), at:stamp(), by:who(), src:'ft' });
   });
