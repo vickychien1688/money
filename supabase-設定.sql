@@ -9,29 +9,33 @@ insert into storage.buckets (id, name, public)
 values ('accounting', 'accounting', false)
 on conflict (id) do nothing;
 
--- 2. 只允許 Vicky 和會計人員讀寫這個空間
---    ★ 把 'pas.pagamo@gmail.com', 'a-chuen@yahoo.com.tw', 'betty29205313@gmail.com' 換成會計人員的 Email（要跟她登入帳號一致）
+-- 2. 只允許 Vicky 讀寫這個空間
+drop policy if exists "accounting_read" on storage.objects;
+drop policy if exists "accounting_select" on storage.objects;
+drop policy if exists "accounting_insert" on storage.objects;
+drop policy if exists "accounting_update" on storage.objects;
+drop policy if exists "accounting_delete" on storage.objects;
+
 create policy "accounting_read" on storage.objects
   for select to authenticated
   using (bucket_id = 'accounting'
-    and auth.email() in ('vickychien127@gmail.com', 'pas.pagamo@gmail.com', 'a-chuen@yahoo.com.tw', 'betty29205313@gmail.com'));
+    and auth.email() = 'vickychien127@gmail.com');
 
 create policy "accounting_insert" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'accounting'
-    and auth.email() in ('vickychien127@gmail.com', 'pas.pagamo@gmail.com', 'a-chuen@yahoo.com.tw', 'betty29205313@gmail.com'));
+    and auth.email() = 'vickychien127@gmail.com');
 
 create policy "accounting_update" on storage.objects
   for update to authenticated
   using (bucket_id = 'accounting'
-    and auth.email() in ('vickychien127@gmail.com', 'pas.pagamo@gmail.com', 'a-chuen@yahoo.com.tw', 'betty29205313@gmail.com'));
+    and auth.email() = 'vickychien127@gmail.com');
 
 create policy "accounting_delete" on storage.objects
   for delete to authenticated
   using (bucket_id = 'accounting'
-    and auth.email() in ('vickychien127@gmail.com', 'pas.pagamo@gmail.com', 'a-chuen@yahoo.com.tw', 'betty29205313@gmail.com'));
+    and auth.email() = 'vickychien127@gmail.com');
 
 -- ============================================================
--- 之後要換會計人員：把上面四條 policy 刪掉重建（換 Email 即可），
--- 或叫 Claude 產生新的 SQL。
+-- 若未來要增加會計人員，必須由 Vicky 明確決定後再修改四條 policy。
 -- ============================================================

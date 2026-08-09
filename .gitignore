@@ -1,0 +1,5 @@
+# 本機內部資料，不發布到公開的 GitHub Pages
+*.txt
+.DS_Store
+.tmp/
+
