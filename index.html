@@ -2106,6 +2106,15 @@ function payrollDrafts() {
 }
 function payrollWarnings() {
   const warnings = [];
+  if (pyMonth.value.slice(5, 7) === '08') {
+    const gradeDiff = staff.full.filter(p => {
+      const suggested = ftSuggestedGrade(p);
+      return suggested && +p.grade !== suggested;
+    });
+    warnings.push(gradeDiff.length
+      ? `8 月年度投保級距審視：${gradeDiff.map(p => p.name).join('、')} 的目前級距與固定月薪建議級距不同；請先與米豆及投保資料核對，下個月再依確認結果調整`
+      : '8 月年度投保級距審視：目前未發現固定月薪與級距差異，仍請核對眷屬及實際投保資料');
+  }
   const punched = Object.keys(punch).length;
   if (!punched) warnings.push('尚未匯入本月打卡檔');
   const ftMissing = staff.full.filter(p => !(punch[p.name] || []).length).map(p => p.name);
