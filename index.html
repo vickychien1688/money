@@ -66,6 +66,19 @@
   .kpi span { display: block; color: #678; font-size: 12px; margin-bottom: 4px; }
   .kpi b { font-size: 20px; color: #1f3a5f; }
   .attention { border-left: 4px solid #e67e22; background: #fff8ec; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.7; }
+  details.attention summary { cursor: pointer; color: #7d5209; }
+  details.attention .alert-list { margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0d8ae; color: #5f5140; }
+  .payroll-subnav { position: sticky; top: 8px; z-index: 20; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px; margin-bottom: 14px; background: rgba(255,255,255,.96); border: 1px solid #d8dee6; border-radius: 12px; box-shadow: 0 3px 12px rgba(31,58,95,.10); }
+  .payroll-subnav button { border: 1px solid #ccd6e2; border-radius: 9px; padding: 9px 14px; background: #f6f8fb; color: #52677e; font-weight: bold; font-size: 13.5px; }
+  .payroll-subnav button.on { border-color: #1f3a5f; background: #1f3a5f; color: #fff; }
+  .payroll-subnav .view-note { margin-left: auto; color: #789; font-size: 12px; }
+  #tab-payroll .payroll-view { display: none; }
+  #tab-payroll[data-payroll-view="run"] .pv-run,
+  #tab-payroll[data-payroll-view="leave"] .pv-leave,
+  #tab-payroll[data-payroll-view="staff"] .pv-staff { display: block; }
+  #tab-payroll:not(.show-payroll-details) .payroll-detail { display: none !important; }
+  .payroll-primary { border: 1px solid #dbe7f3; box-shadow: 0 4px 14px rgba(31,58,95,.09); }
+  .payroll-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
   .scroll-x { overflow-x: auto; }
   .schedule-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
   .schedule-photo { border: 1px solid #d8dee6; border-radius: 8px; padding: 7px; background: #fff; }
@@ -74,7 +87,7 @@
   #scheduleLightbox { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.86); display: none; align-items: center; justify-content: center; padding: 18px; }
   #scheduleLightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; background: #fff; }
   #scheduleLightbox button { position: fixed; right: 16px; top: 14px; border: none; border-radius: 20px; width: 38px; height: 38px; font-size: 22px; }
-  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } }
+  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } .payroll-subnav { position: static; } .payroll-subnav .view-note { width: 100%; margin-left: 2px; } }
 
   /* ===== 登入 ===== */
   #loginMask { position: fixed; inset: 0; background: #1f3a5f; display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -238,18 +251,26 @@
 </section>
 
 <!-- ============ 薪資申報 ============ -->
-<section class="tab" id="tab-payroll">
-  <div class="card">
+<section class="tab" id="tab-payroll" data-payroll-view="run">
+  <div class="payroll-subnav" aria-label="薪資功能分類">
+    <button type="button" class="on" data-payroll-view-btn="run">① 本月薪資</button>
+    <button type="button" data-payroll-view-btn="leave">② 特休管理</button>
+    <button type="button" data-payroll-view-btn="staff">③ 員工設定</button>
+    <span class="view-note" id="payrollViewNote">平常只要處理提醒，再確認本月薪資。</span>
+  </div>
+
+  <div class="card payroll-view pv-run payroll-primary">
     <h2>✅ 本月薪資助理</h2>
     <p class="hint">照順序完成即可。系統會自動計算並取代同月份舊試算，不會重複累加。</p>
     <div class="flow" id="payrollFlow"></div>
     <div id="payrollAlerts"></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
+    <div class="payroll-actions">
       <button class="btn green" id="pyFinalize">確認並完成本月薪資</button>
+      <button class="btn gray" id="pyDetailsToggle" type="button">查看薪資明細</button>
       <span id="pyFinalizeSummary" class="hint" style="margin:0"></span>
     </div>
   </div>
-  <div class="card">
+  <div class="card payroll-view pv-run">
     <div class="monthpick">月份：<input type="month" id="pyMonth">
       <label class="btn sm" style="cursor:pointer">📂 匯入打卡檔（員工簽到記錄 Excel）<input type="file" id="punchFile" accept=".xlsx,.xls" style="display:none"></label>
       <span id="punchMsg" style="font-size:12.5px;color:#1e8449"></span></div>
@@ -282,7 +303,7 @@
     </details>
   </div>
 
-  <div class="card">
+  <div class="card payroll-view pv-leave">
     <h2>🌴 特休管理（正職＋PT）</h2>
     <p class="hint">預設採到職週年制，依《勞動基準法》第 38 條自動計算。特休屬有薪假，不會列入出缺勤扣款；年度終結或離職仍有未休時，系統只提醒並估算未休工資，由你確認後再處理。</p>
     <div style="margin:8px 0">
@@ -307,7 +328,7 @@
     </details>
   </div>
 
-  <div class="card">
+  <div class="card payroll-view pv-run payroll-detail">
     <h2>🧑‍🏫 正職薪資（底薪＋額外課程＋加給－遲到－出缺勤）</h2>
     <div id="ftInfo" class="hint"></div>
     <table class="ledger" id="ftTable" style="margin-top:8px"></table>
@@ -317,29 +338,29 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card payroll-view pv-run payroll-detail">
     <h2>⏱ PT 薪資（打卡薪資＋額外課程薪資－勞保）</h2>
     <div id="ptInfo" class="hint"></div>
     <table class="ledger" id="ptCalc" style="margin-top:8px"></table>
     <div style="margin-top:10px"><button class="btn green" id="ptWrite">✍ 寫入本月薪資申報</button></div>
   </div>
 
-  <div class="card">
+  <div class="card payroll-view pv-run payroll-detail">
     <h2>🇬🇧 英文老師薪資（堂數 × 堂費 ＋ 津貼補課 − 勞健保）</h2>
     <div id="engInfo" class="hint"></div>
     <div id="engWrap" style="margin-top:8px"></div>
     <div style="margin-top:10px"><button class="btn green" id="engWrite">✍ 寫入本月薪資申報</button></div>
   </div>
 
-  <div class="card">
+  <div class="card payroll-view pv-run payroll-detail">
     <h2>🧾 薪資單（發給員工）</h2>
     <p class="hint">一人一頁，開新視窗後按列印（或「另存為 PDF」），就能發給員工；最下面有簽收欄。內容照上面三區目前的數字帶入。</p>
     <button class="btn" id="slipExport">🧾 產生本月薪資單</button>
   </div>
 
-  <div class="card">
-    <details>
-      <summary style="cursor:pointer;font-size:15px;font-weight:bold">⚙️ 員工名冊設定（設定一次就好，點開）</summary>
+  <div class="card payroll-view pv-staff">
+    <details id="staffSettings" open>
+      <summary style="cursor:pointer;font-size:15px;font-weight:bold">⚙️ 員工資料與投保設定</summary>
       <p class="hint" style="margin-top:8px">姓名填本名（申報用）；打卡系統寫法不同的用「別名」對應（例：陳弈安的別名填 陳奕安）。
         <label class="btn sm" style="cursor:pointer">📂 匯入名冊 JSON<input type="file" id="staffFile" accept=".json" style="display:none"></label>
         <span id="staffMsg" style="font-size:12.5px;color:#1e8449"></span></p>
@@ -388,7 +409,7 @@
     </details>
   </div>
 
-  <div class="card">
+  <div class="card payroll-view pv-run payroll-detail">
     <h2>新增申報項目</h2>
     <div class="frm">
       <label>員工／項目<input id="pyWho" class="w-m"></label>
@@ -402,7 +423,7 @@
       <button class="btn green" id="pyAdd">＋ 記一筆</button>
     </div>
   </div>
-  <div class="card">
+  <div class="card payroll-view pv-run payroll-detail">
     <h2>本月薪資與可申報費用（按統編小計）</h2>
     <table class="ledger" id="pyTable"></table>
     <div style="margin-top:10px"><button class="btn orange" id="pyPrint">🖨 列印給會計師</button></div>
@@ -586,6 +607,26 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + b.dataset.tab));
   if (b.dataset.tab === 'report') buildReport();
 });
+
+/* 薪資頁只顯示目前要做的工作；詳細試算需要時再展開 */
+const payrollSection = document.getElementById('tab-payroll');
+const payrollViewNote = document.getElementById('payrollViewNote');
+const payrollViewNotes = {
+  run: '平常只要處理提醒，再確認本月薪資。',
+  leave: '集中查看特休餘額、匯入紀錄與人工登記。',
+  staff: '底薪、到職日與投保級距等低頻資料集中在這裡。',
+};
+function setPayrollView(view) {
+  payrollSection.dataset.payrollView = view;
+  document.querySelectorAll('[data-payroll-view-btn]').forEach(b => b.classList.toggle('on', b.dataset.payrollViewBtn === view));
+  payrollViewNote.textContent = payrollViewNotes[view] || '';
+  if (view === 'staff') document.getElementById('staffSettings').open = true;
+}
+document.querySelectorAll('[data-payroll-view-btn]').forEach(b => b.onclick = () => setPayrollView(b.dataset.payrollViewBtn));
+document.getElementById('pyDetailsToggle').onclick = () => {
+  const shown = payrollSection.classList.toggle('show-payroll-details');
+  document.getElementById('pyDetailsToggle').textContent = shown ? '收起薪資明細' : '查看薪資明細';
+};
 
 /* 事業體下拉選單 */
 document.querySelectorAll('#incTax,#rbTax,#fxTax,#pyTax,#roTax,#midoJournalTax').forEach(sel => {
@@ -2106,15 +2147,6 @@ function payrollDrafts() {
 }
 function payrollWarnings() {
   const warnings = [];
-  if (pyMonth.value.slice(5, 7) === '08') {
-    const gradeDiff = staff.full.filter(p => {
-      const suggested = ftSuggestedGrade(p);
-      return suggested && +p.grade !== suggested;
-    });
-    warnings.push(gradeDiff.length
-      ? `8 月年度投保級距審視：${gradeDiff.map(p => p.name).join('、')} 的目前級距與固定月薪建議級距不同；請先與米豆及投保資料核對，下個月再依確認結果調整`
-      : '8 月年度投保級距審視：目前未發現固定月薪與級距差異，仍請核對眷屬及實際投保資料');
-  }
   const punched = Object.keys(punch).length;
   if (!punched) warnings.push('尚未匯入本月打卡檔');
   const ftMissing = staff.full.filter(p => !(punch[p.name] || []).length).map(p => p.name);
@@ -2141,6 +2173,15 @@ function payrollWarnings() {
   const asOf = leaveAsOf(), next30 = new Date(asOf); next30.setDate(next30.getDate() + 30);
   const expiring = allLeaveStaff().map(p => ({ p, s: leaveStatus(p, asOf) })).filter(x => x.s.end && x.s.end > asOf && x.s.end <= next30 && x.s.remainHours > 0);
   if (expiring.length) warnings.push('30 天內特休週期結束：' + expiring.map(x => `${x.p.name}剩${hoursLabel(x.s.remainHours)}`).join('、'));
+  if (pyMonth.value.slice(5, 7) === '08') {
+    const gradeDiff = staff.full.filter(p => {
+      const suggested = ftSuggestedGrade(p);
+      return suggested && +p.grade !== suggested;
+    });
+    warnings.push(gradeDiff.length
+      ? `8 月年度投保級距審視：${gradeDiff.map(p => p.name).join('、')} 的目前級距與固定月薪建議級距不同；請先與米豆及投保資料核對，下個月再依確認結果調整`
+      : '8 月年度投保級距審視：目前未發現固定月薪與級距差異，仍請核對眷屬及實際投保資料');
+  }
   return warnings;
 }
 function renderPayrollAssistant() {
@@ -2155,7 +2196,7 @@ function renderPayrollAssistant() {
   ];
   flow.innerHTML = steps.map(([ok, title, sub]) => `<div class="flow-step ${ok ? 'ok' : 'warn'}"><b>${ok ? '✓' : '○'} ${title}</b><br><span>${esc(sub)}</span></div>`).join('');
   document.getElementById('payrollAlerts').innerHTML = warnings.length
-    ? `<div class="attention"><b>請確認 ${warnings.length} 項：</b><br>${warnings.map(x => '• ' + esc(x)).join('<br>')}</div>`
+    ? `<details class="attention"><summary><b>下一步：${esc(warnings[0])}</b>${warnings.length > 1 ? `　<span style="font-weight:normal">另有 ${warnings.length - 1} 項（點開查看）</span>` : ''}</summary><div class="alert-list">${warnings.map(x => '• ' + esc(x)).join('<br>')}</div></details>`
     : '<div class="flow-step ok"><b>✓ 沒有發現需要處理的異常</b></div>';
   document.getElementById('pyFinalizeSummary').textContent = `預計 ${d.ft.length + d.pt.length + d.eng.length} 人，實發 ${NT(d.total)}`;
 }
