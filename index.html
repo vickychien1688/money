@@ -79,6 +79,33 @@
   #tab-payroll:not(.show-payroll-details) .payroll-detail { display: none !important; }
   .payroll-primary { border: 1px solid #dbe7f3; box-shadow: 0 4px 14px rgba(31,58,95,.09); }
   .payroll-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  #ftTable.ft-card-table { border-collapse: separate; border-spacing: 0 12px; }
+  #ftTable.ft-card-table > tbody > tr > td { border: 0; padding: 0; background: transparent; }
+  #ftTable.ft-card-table > tbody > tr.detrow > td { padding: 10px; border: 1px solid #dce4ed; border-radius: 10px; background: #fbfcfe; }
+  .ft-card { overflow: hidden; border: 1px solid #dce4ed; border-radius: 14px; background: #fff; box-shadow: 0 2px 8px rgba(31,58,95,.07); text-align: left; }
+  .ft-card-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #e7ecf2; background: linear-gradient(135deg,#f8fbff,#f3f7fb); }
+  .ft-card-name { min-width: 120px; }
+  .ft-card-name strong { display: block; color: #1f3a5f; font-size: 17px; }
+  .ft-card-name a { display: inline-block; margin-top: 3px; color: #2980b9; font-size: 12px; cursor: pointer; }
+  .ft-card-total { margin-left: auto; text-align: right; }
+  .ft-card-total span { display: block; color: #789; font-size: 11px; }
+  .ft-card-total b { color: #176b45; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .ft-card-body { padding: 14px 16px 16px; }
+  .ft-pay-grid { display: grid; grid-template-columns: repeat(4,minmax(110px,1fr)); gap: 10px; }
+  .ft-field { display: flex; flex-direction: column; gap: 4px; color: #687b90; font-size: 11.5px; }
+  .ft-field input { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #223; font-size: 14px; text-align: right; }
+  .ft-section { margin-top: 14px; padding-top: 13px; border-top: 1px solid #edf1f5; }
+  .ft-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: #40566d; font-size: 13px; font-weight: bold; }
+  .ft-course-row { display: grid; grid-template-columns: minmax(150px,1fr) 74px 16px 84px 24px; gap: 6px; align-items: center; margin-bottom: 7px; }
+  .ft-course-row input { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 8px; }
+  .ft-course-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: #567; font-size: 12px; }
+  .ft-adjust { margin-top: 12px; border: 1px solid #e1e7ee; border-radius: 10px; background: #fafbfd; }
+  .ft-adjust summary { padding: 9px 11px; cursor: pointer; color: #52677e; font-size: 12.5px; font-weight: bold; }
+  .ft-adjust summary span { margin-left: 8px; color: #8796a7; font-weight: normal; }
+  .ft-adjust-grid { display: grid; grid-template-columns: repeat(5,minmax(95px,1fr)); gap: 9px; padding: 0 11px 11px; }
+  .ft-note { margin-top: 10px; }
+  .ft-note input { width: 100%; padding: 8px 9px; border: 1px solid #cbd5e1; border-radius: 8px; }
+  #ftTable .ft-grand td { padding: 10px 14px; border: 0; border-radius: 10px; background: #eaf2f8; color: #1f3a5f; font-weight: bold; text-align: right; }
   .scroll-x { overflow-x: auto; }
   .schedule-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
   .schedule-photo { border: 1px solid #d8dee6; border-radius: 8px; padding: 7px; background: #fff; }
@@ -87,7 +114,7 @@
   #scheduleLightbox { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.86); display: none; align-items: center; justify-content: center; padding: 18px; }
   #scheduleLightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; background: #fff; }
   #scheduleLightbox button { position: fixed; right: 16px; top: 14px; border: none; border-radius: 20px; width: 38px; height: 38px; font-size: 22px; }
-  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } .payroll-subnav { position: static; } .payroll-subnav .view-note { width: 100%; margin-left: 2px; } }
+  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } .payroll-subnav { position: static; } .payroll-subnav .view-note { width: 100%; margin-left: 2px; } .ft-pay-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-adjust-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-course-row { grid-template-columns: 1fr 64px 14px 74px 22px; } }
 
   /* ===== 登入 ===== */
   #loginMask { position: fixed; inset: 0; background: #1f3a5f; display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -1694,19 +1721,42 @@ function saveFt() { const cur = ftRows; markDirty('ft', ftPath(pyMonth.value), (
 function renderFt() {
   const t = document.getElementById('ftTable');
   document.getElementById('ftInfo').textContent = staff.full.length
-    ? '遲到費率＝(底薪＋職務＋績效＋暑假加給)÷30天÷8時÷60分（照會計師算法）。學期要提前15分打卡、暑假(7,8月)上班時間前打卡即可；「從打卡算遲到」算完可手改；勞健保級距空著＝不扣。'
+    ? '每人一張薪資卡。平常確認底薪、加給、額外課程與實發金額即可；遲到、出缺勤及勞健保收在「調整與扣款」中。'
     : '先到下方「員工名冊設定」加入正職員工。';
   if (!ftRows.length) { t.innerHTML = ''; return; }
-  const num = (i, k, w) => `<input type="number" data-i="${i}" data-k="${k}" value="${ftRows[i][k] || ''}" style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right">`;
-  const txt = (i, k, w, ph) => `<input data-i="${i}" data-k="${k}" value="${esc(ftRows[i][k] || '')}" placeholder="${ph || ''}" style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px">`;
-  t.innerHTML = '<tr><th>姓名</th><th>底薪</th><th>職務</th><th>暑假</th><th>績效</th><th>額外課程</th><th>其他加項</th><th>加項備註</th><th>遲到分</th><th>遲到扣</th><th>出缺勤±</th><th>勞保−</th><th>健保−</th><th>合計</th><th>備註</th></tr>' +
-    ftRows.map((r, i) => `<tr><td class="l">${esc(r.name)}<br><a data-det="${i}" style="font-size:11px;color:#2980b9;cursor:pointer">打卡明細▾</a></td><td>${num(i, 'base', 62)}</td><td>${num(i, 'duty', 52)}</td><td>${num(i, 'summer', 52)}</td><td>${num(i, 'perf', 52)}</td>
-      <td>${(r.courseItems || []).map((x, j) => `<div style="white-space:nowrap;margin-bottom:4px"><input data-i="${i}" data-course-i="${j}" data-course-k="name" value="${esc(x.name || '')}" placeholder="例：G8數學課" style="width:88px;padding:4px;border:1px solid #c6cfda;border-radius:5px"> <input type="number" min="0" step="0.25" data-i="${i}" data-course-i="${j}" data-course-k="hours" value="${x.hours || ''}" placeholder="時數" style="width:46px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"> × <input type="number" min="0" data-i="${i}" data-course-i="${j}" data-course-k="rate" value="${x.rate || ''}" placeholder="時薪" style="width:50px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"> <button type="button" class="course-remove" data-i="${i}" data-course-i="${j}" style="border:0;background:none;color:#c0392b;cursor:pointer;padding:0">✕</button></div>`).join('')}<div style="font-size:11px;color:#2980b9">課程小計 <span id="ftCourse${i}">${NT(coursePay(r))}</span>　<button type="button" class="course-add btn sm" data-i="${i}">＋加入課程</button></div></td>
-      <td>${num(i, 'extra', 56)}</td><td>${txt(i, 'extraNote', 92, 'G7數學4堂')}</td>
-      <td>${num(i, 'lateMin', 46)}</td><td>${num(i, 'late', 52)}</td><td>${num(i, 'adj', 62)}</td>
-      <td>${num(i, 'labor', 52)}</td><td>${num(i, 'health', 52)}</td>
-      <td class="num" id="ftSum${i}"><b>${NT(ftTotal(r))}</b></td><td>${txt(i, 'note', 100)}</td></tr>`).join('') +
-    `<tr class="subtotal"><td colspan="13">合計</td><td class="num" id="ftGrand">${NT(ftRows.reduce((s, r) => s + ftTotal(r), 0))}</td><td></td></tr>`;
+  t.className = 'ledger ft-card-table';
+  const num = (i, k) => `<input type="number" data-i="${i}" data-k="${k}" value="${ftRows[i][k] || ''}">`;
+  const txt = (i, k, ph) => `<input data-i="${i}" data-k="${k}" value="${esc(ftRows[i][k] || '')}" placeholder="${ph || ''}">`;
+  const field = (label, i, k) => `<label class="ft-field"><span>${label}</span>${num(i, k)}</label>`;
+  t.innerHTML = ftRows.map((r, i) => `<tr><td><article class="ft-card">
+    <header class="ft-card-head">
+      <div class="ft-card-name"><strong>${esc(r.name)}</strong><a data-det="${i}">查看打卡明細 ▾</a></div>
+      <div class="ft-card-total"><span>本月實發</span><b id="ftSum${i}">${NT(ftTotal(r))}</b></div>
+    </header>
+    <div class="ft-card-body">
+      <div class="ft-pay-grid">${field('底薪', i, 'base')}${field('職務加給', i, 'duty')}${field('暑假加給', i, 'summer')}${field('績效獎金', i, 'perf')}</div>
+      <section class="ft-section">
+        <div class="ft-section-title">額外課程</div>
+        ${(r.courseItems || []).map((x, j) => `<div class="ft-course-row">
+          <input data-i="${i}" data-course-i="${j}" data-course-k="name" value="${esc(x.name || '')}" placeholder="課程名稱，例如 G8 數學課">
+          <input type="number" min="0" step="0.25" data-i="${i}" data-course-i="${j}" data-course-k="hours" value="${x.hours || ''}" placeholder="時數" aria-label="課程時數"> <span>×</span>
+          <input type="number" min="0" data-i="${i}" data-course-i="${j}" data-course-k="rate" value="${x.rate || ''}" placeholder="時薪" aria-label="課程時薪">
+          <button type="button" class="course-remove" data-i="${i}" data-course-i="${j}" aria-label="移除課程" style="border:0;background:none;color:#c0392b;font-size:16px">✕</button>
+        </div>`).join('')}
+        <div class="ft-course-tools"><span>課程小計 <b id="ftCourse${i}">${NT(coursePay(r))}</b></span><button type="button" class="course-add btn sm" data-i="${i}">＋ 加入課程</button></div>
+      </section>
+      <details class="ft-adjust">
+        <summary>調整與扣款 <span>遲到扣 ${NT(r.late || 0)}・勞保 ${NT(r.labor || 0)}・健保 ${NT(r.health || 0)}</span></summary>
+        <div class="ft-adjust-grid">
+          ${field('其他加項', i, 'extra')}
+          <label class="ft-field"><span>加項說明</span>${txt(i, 'extraNote', '例如：代課')}</label>
+          ${field('遲到分鐘', i, 'lateMin')}${field('遲到扣款', i, 'late')}${field('出缺勤調整', i, 'adj')}${field('勞保', i, 'labor')}${field('健保', i, 'health')}
+        </div>
+      </details>
+      <label class="ft-field ft-note"><span>內部備註</span>${txt(i, 'note', '選填')}</label>
+    </div>
+  </article></td></tr>`).join('') +
+    `<tr class="ft-grand"><td>正職實發合計　<span id="ftGrand">${NT(ftRows.reduce((s, r) => s + ftTotal(r), 0))}</span></td></tr>`;
   t.querySelectorAll('.course-add').forEach(b => b.onclick = () => {
     const r = ftRows[+b.dataset.i]; (r.courseItems = r.courseItems || []).push({ name: '', hours: 0, rate: 0 }); saveFt(); renderFt();
   });
@@ -1719,7 +1769,7 @@ function renderFt() {
     const i = +el.dataset.i, r = ftRows[i], x = r.courseItems[+el.dataset.courseI], k = el.dataset.courseK;
     x[k] = el.type === 'number' ? (+el.value || 0) : el.value;
     document.getElementById('ftCourse' + i).textContent = NT(coursePay(r));
-    document.getElementById('ftSum' + i).innerHTML = '<b>' + NT(ftTotal(r)) + '</b>';
+    document.getElementById('ftSum' + i).textContent = NT(ftTotal(r));
     document.getElementById('ftGrand').textContent = NT(ftRows.reduce((s, y) => s + ftTotal(y), 0)); saveFt();
   });
   t.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
@@ -1729,11 +1779,11 @@ function renderFt() {
       r.late = Math.round((+r.lateMin || 0) * ((+r.base || 0) + (+r.duty || 0) + (+r.perf || 0) + (+r.summer || 0)) / 14400);
       const lt = el.closest('tr').querySelector('input[data-k="late"]'); if (lt) lt.value = r.late || '';
     }
-    document.getElementById('ftSum' + i).innerHTML = '<b>' + NT(ftTotal(r)) + '</b>';
+    document.getElementById('ftSum' + i).textContent = NT(ftTotal(r));
     document.getElementById('ftGrand').textContent = NT(ftRows.reduce((s, x) => s + ftTotal(x), 0));
     saveFt();
   });
-  bindPunchDetail(t, i => ({ name: ftRows[i].name, shift: (staff.full.find(x => x.name === ftRows[i].name) || {}).shift }), 15);
+  bindPunchDetail(t, i => ({ name: ftRows[i].name, shift: (staff.full.find(x => x.name === ftRows[i].name) || {}).shift }), 1);
 }
 document.getElementById('ftLate').onclick = () => {
   let n = 0; const miss = [], part = [];
