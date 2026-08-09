@@ -40,6 +40,9 @@
   table.ledger tr.bad { background: #fdeeee; }
   .del { background: none; border: none; color: #c0392b; font-size: 15px; }
   .subtotal { background: #f4f6fa; font-weight: bold; }
+  .py-amt-edit { width: 108px; padding: 6px 8px; border: 1px solid #9fb5ca; border-radius: 7px; background: #fff; color: #173a5e; font-size: 14px; font-weight: bold; text-align: right; font-variant-numeric: tabular-nums; }
+  .py-amt-edit:focus { outline: 2px solid rgba(41,128,185,.2); border-color: #2980b9; }
+  .py-manual { display: block; margin-top: 2px; color: #b36b00; font-size: 10.5px; font-weight: normal; }
 
   /* ===== 表單 ===== */
   .frm { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
@@ -461,6 +464,7 @@
   </div>
   <div class="card payroll-view pv-run payroll-detail">
     <h2>本月薪資與可申報費用（按統編小計）</h2>
+    <p class="hint">金額可以直接修改並自動儲存、重算小計。若重新按「確認並完成本月薪資」，申報金額會依最新薪資試算重新產生。</p>
     <table class="ledger" id="pyTable"></table>
     <div style="margin-top:10px"><button class="btn orange" id="pyPrint">🖨 列印給會計師</button></div>
   </div>
@@ -2341,13 +2345,21 @@ function renderPayroll() {
     let sub = 0;
     byTax[tax].forEach(r => {
       const i = payroll.indexOf(r); sub += +r.amt || 0;
-      html += `<tr><td class="l">${esc(r.who)}</td><td>${esc(r.cat)}</td><td class="num">${NT(r.amt)}</td><td class="l">${esc(r.note)}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`;
+      html += `<tr><td class="l">${esc(r.who)}</td><td>${esc(r.cat)}</td><td class="num"><input class="py-amt-edit" type="number" data-py-amt="${i}" value="${+r.amt || 0}" aria-label="${esc(r.who)}申報金額">${r.manual ? '<span class="py-manual">已手動調整</span>' : ''}</td><td class="l">${esc(r.note)}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`;
     });
     grand += sub;
-    html += `<tr class="subtotal"><td colspan="2">小計</td><td class="num">${NT(sub)}</td><td colspan="2"></td></tr>`;
+    html += `<tr class="subtotal"><td colspan="2">小計</td><td class="num" data-py-subtax="${esc(tax)}">${NT(sub)}</td><td colspan="2"></td></tr>`;
   }
-  html += `<tr class="subtotal"><td colspan="2">全部合計</td><td class="num">${NT(grand)}</td><td colspan="2"></td></tr>`;
+  html += `<tr class="subtotal"><td colspan="2">全部合計</td><td class="num" id="pyGrand">${NT(grand)}</td><td colspan="2"></td></tr>`;
   t.innerHTML = html;
+  t.querySelectorAll('input[data-py-amt]').forEach(el => el.onchange = () => {
+    const r = payroll[+el.dataset.pyAmt];
+    if (!r) return;
+    r.amt = +el.value || 0;
+    r.manual = true;
+    r.adjustedAt = stamp();
+    renderPayroll(); savePayroll();
+  });
   t.querySelectorAll('.del').forEach(b => b.onclick = () => { payroll.splice(+b.dataset.i, 1); renderPayroll(); savePayroll(); });
   renderPayrollAssistant();
 }
@@ -2372,15 +2384,15 @@ document.getElementById('pyPrint').onclick = () => {
     const rows = byTax[tax]; const sub = rows.reduce((s, r) => s + +r.amt, 0);
     body += `<h3 style="margin:18px 0 8px;font-size:15px">${esc(entName(tax))}（統編 ${esc(tax)}）</h3>
     <table style="width:100%;border-collapse:collapse;font-size:13.5px">
-      <tr><th style="border:1px solid #333;padding:7px;background:#f0f0f0">員工／項目</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">類別</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">金額</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">備註</th></tr>
-      ${rows.map(r => `<tr><td style="border:1px solid #333;padding:7px">${esc(r.who)}</td><td style="border:1px solid #333;padding:7px;text-align:center">${esc(r.cat)}</td><td style="border:1px solid #333;padding:7px;text-align:right">${NT(r.amt)}</td><td style="border:1px solid #333;padding:7px">${esc(r.note)}</td></tr>`).join('')}
-      <tr><td style="border:1px solid #333;padding:7px;font-weight:bold" colspan="2">小計</td><td style="border:1px solid #333;padding:7px;text-align:right;font-weight:bold">${NT(sub)}</td><td style="border:1px solid #333"></td></tr>
+      <tr><th style="border:1px solid #333;padding:7px;background:#f0f0f0">員工／項目</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">申報類別</th><th style="border:1px solid #333;padding:7px;background:#f0f0f0">申報金額</th></tr>
+      ${rows.map(r => `<tr><td style="border:1px solid #333;padding:7px">${esc(r.who)}</td><td style="border:1px solid #333;padding:7px;text-align:center">${esc(r.cat)}</td><td style="border:1px solid #333;padding:7px;text-align:right">${NT(r.amt)}</td></tr>`).join('')}
+      <tr><td style="border:1px solid #333;padding:7px;font-weight:bold" colspan="2">小計</td><td style="border:1px solid #333;padding:7px;text-align:right;font-weight:bold">${NT(sub)}</td></tr>
     </table>`;
   }
   document.getElementById('printArea').innerHTML = `
     <div style="max-width:700px;margin:0 auto;font-family:'PingFang TC',sans-serif">
     <h1 style="text-align:center;font-size:20px">薪資與申報費用彙總表　${esc(m)}</h1>${body}
-    <p style="font-size:12px;color:#777;margin-top:20px">製表日期：${todayStr()}</p></div>`;
+    <p style="font-size:12px;color:#777;margin-top:20px">製表日期：${todayStr()}　｜　本表僅列申報金額，內部薪資組成明細未列。</p></div>`;
   window.print();
 };
 
