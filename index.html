@@ -1113,13 +1113,13 @@ function leaveCycleFor(p, asOf) {
 const leaveAdjustKey = (p, cycle) => `${p.name}|${dateISO(cycle.start)}`;
 function leaveStatus(p, asOf) {
   const cycle = leaveCycleFor(p, asOf);
-  if (!cycle.start || !cycle.end) return Object.assign(cycle, { entitledHours: 0, usedHours: 0, remainHours: 0, adjustHours: 0, payout: 0 });
+  const isPt = (staff.pt || []).includes(p), weeklyHours = +p.weeklyHours || 0;
+  if (!cycle.start || !cycle.end) return Object.assign(cycle, { entitledHours: 0, usedHours: 0, remainHours: 0, adjustHours: 0, payout: 0, isPt, weeklyHours, ratio: isPt ? Math.min(1, weeklyHours / 40) : 1, incomplete: isPt && !weeklyHours });
   const key = leaveAdjustKey(p, cycle), adjustHours = +(leaveData.adjust || {})[key] || 0;
   const inCycle = r => r.name === p.name && r.date >= dateISO(cycle.start) && r.date < dateISO(cycle.end) && r.date <= dateISO(asOf);
   const approved = (leaveData.records || []).filter(r => inCycle(r) && (!r.status || r.status === 'approved'));
   const pending = (leaveData.records || []).filter(r => inCycle(r) && r.status === 'pending');
   const usedHours = approved.reduce((s, r) => s + (+r.hours || 0), 0), pendingHours = pending.reduce((s, r) => s + (+r.hours || 0), 0);
-  const isPt = (staff.pt || []).includes(p), weeklyHours = +p.weeklyHours || 0;
   const ratio = isPt ? Math.min(1, weeklyHours / 40) : 1;
   const incomplete = isPt && !weeklyHours;
   const entitledHours = incomplete ? 0 : cycle.days * 8 * ratio + adjustHours, remainHours = Math.max(0, entitledHours - usedHours);
