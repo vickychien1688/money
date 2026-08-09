@@ -75,10 +75,18 @@
   .payroll-subnav button { border: 1px solid #ccd6e2; border-radius: 9px; padding: 9px 14px; background: #f6f8fb; color: #52677e; font-weight: bold; font-size: 13.5px; }
   .payroll-subnav button.on { border-color: #1f3a5f; background: #1f3a5f; color: #fff; }
   .payroll-subnav .view-note { margin-left: auto; color: #789; font-size: 12px; }
+  .payroll-group-tabs { display: flex; align-items: center; gap: 8px; padding: 9px 10px; margin: 4px 0 10px; border: 1px solid #d8e2ec; border-radius: 11px; background: #f7f9fc; }
+  .payroll-group-tabs button { min-width: 105px; padding: 9px 14px; border: 1px solid #bdcbd9; border-radius: 8px; background: #fff; color: #52677e; font-weight: bold; cursor: pointer; }
+  .payroll-group-tabs button.on { border-color: #2980b9; background: #2980b9; color: #fff; }
+  .payroll-group-tabs span { margin-left: auto; color: #789; font-size: 12px; }
   #tab-payroll .payroll-view { display: none; }
   #tab-payroll[data-payroll-view="run"] .pv-run,
   #tab-payroll[data-payroll-view="leave"] .pv-leave,
   #tab-payroll[data-payroll-view="staff"] .pv-staff { display: block; }
+  #tab-payroll .payroll-group { display: none; }
+  #tab-payroll[data-pay-group="ft"] .pg-ft,
+  #tab-payroll[data-pay-group="eng"] .pg-eng,
+  #tab-payroll[data-pay-group="pt"] .pg-pt { display: block; }
   #tab-payroll:not(.show-payroll-details) .payroll-detail { display: none !important; }
   .payroll-primary { border: 1px solid #dbe7f3; box-shadow: 0 4px 14px rgba(31,58,95,.09); }
   .payroll-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
@@ -126,7 +134,7 @@
   #scheduleLightbox { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.86); display: none; align-items: center; justify-content: center; padding: 18px; }
   #scheduleLightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; background: #fff; }
   #scheduleLightbox button { position: fixed; right: 16px; top: 14px; border: none; border-radius: 20px; width: 38px; height: 38px; font-size: 22px; }
-  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } .payroll-subnav { position: static; } .payroll-subnav .view-note { width: 100%; margin-left: 2px; } .ft-pay-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-adjust-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-course-row { grid-template-columns: 1fr 64px 14px 74px 22px; } .ft-allowance-head { display: none; } .ft-allowance-row { grid-template-columns: 1fr 1fr 26px; } .ft-allowance-label, .ft-allowance-row input[data-allow-k="name"] { grid-column: 1 / -1; } }
+  @media (max-width: 720px) { .flow, .kpis { grid-template-columns: repeat(2, 1fr); } #tabs button { padding: 8px 11px; font-size: 13px; } .payroll-subnav { position: static; } .payroll-subnav .view-note { width: 100%; margin-left: 2px; } .payroll-group-tabs { flex-wrap: wrap; } .payroll-group-tabs button { min-width: 0; flex: 1; } .payroll-group-tabs span { width: 100%; margin-left: 2px; } .ft-pay-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-adjust-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .ft-course-row { grid-template-columns: 1fr 64px 14px 74px 22px; } .ft-allowance-head { display: none; } .ft-allowance-row { grid-template-columns: 1fr 1fr 26px; } .ft-allowance-label, .ft-allowance-row input[data-allow-k="name"] { grid-column: 1 / -1; } }
 
   /* ===== 登入 ===== */
   #loginMask { position: fixed; inset: 0; background: #1f3a5f; display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -290,7 +298,7 @@
 </section>
 
 <!-- ============ 薪資申報 ============ -->
-<section class="tab" id="tab-payroll" data-payroll-view="run">
+<section class="tab" id="tab-payroll" data-payroll-view="run" data-pay-group="ft">
   <div class="payroll-subnav" aria-label="薪資功能分類">
     <button type="button" class="on" data-payroll-view-btn="run">① 本月薪資</button>
     <button type="button" data-payroll-view-btn="leave">② 特休管理</button>
@@ -367,7 +375,14 @@
     </details>
   </div>
 
-  <div class="card payroll-view pv-run payroll-detail">
+  <div class="payroll-group-tabs payroll-view pv-run payroll-detail" aria-label="薪資人員分類">
+    <button type="button" class="on" data-pay-group-btn="ft">正職</button>
+    <button type="button" data-pay-group-btn="eng">英文老師</button>
+    <button type="button" data-pay-group-btn="pt">PT</button>
+    <span>一次只顯示一類人員</span>
+  </div>
+
+  <div class="card payroll-view pv-run payroll-detail payroll-group pg-ft">
     <h2>🧑‍🏫 正職薪資（底薪＋額外課程＋加給－遲到－出缺勤）</h2>
     <div id="ftInfo" class="hint"></div>
     <table class="ledger" id="ftTable" style="margin-top:8px"></table>
@@ -377,14 +392,14 @@
     </div>
   </div>
 
-  <div class="card payroll-view pv-run payroll-detail">
+  <div class="card payroll-view pv-run payroll-detail payroll-group pg-pt">
     <h2>⏱ PT 薪資（打卡薪資＋額外課程薪資－勞保）</h2>
     <div id="ptInfo" class="hint"></div>
     <table class="ledger" id="ptCalc" style="margin-top:8px"></table>
     <div style="margin-top:10px"><button class="btn green" id="ptWrite">✍ 寫入本月薪資申報</button></div>
   </div>
 
-  <div class="card payroll-view pv-run payroll-detail">
+  <div class="card payroll-view pv-run payroll-detail payroll-group pg-eng">
     <h2>🇬🇧 英文老師薪資（堂數 × 堂費 ＋ 津貼補課 − 勞健保）</h2>
     <div id="engInfo" class="hint"></div>
     <div id="engWrap" style="margin-top:8px"></div>
@@ -663,6 +678,11 @@ function setPayrollView(view) {
   if (view === 'staff') document.getElementById('staffSettings').open = true;
 }
 document.querySelectorAll('[data-payroll-view-btn]').forEach(b => b.onclick = () => setPayrollView(b.dataset.payrollViewBtn));
+function setPayrollGroup(group) {
+  payrollSection.dataset.payGroup = group;
+  document.querySelectorAll('[data-pay-group-btn]').forEach(b => b.classList.toggle('on', b.dataset.payGroupBtn === group));
+}
+document.querySelectorAll('[data-pay-group-btn]').forEach(b => b.onclick = () => setPayrollGroup(b.dataset.payGroupBtn));
 document.getElementById('pyDetailsToggle').onclick = () => {
   const shown = payrollSection.classList.toggle('show-payroll-details');
   document.getElementById('pyDetailsToggle').textContent = shown ? '收起薪資明細' : '查看薪資明細';
