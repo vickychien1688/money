@@ -1759,6 +1759,16 @@ function normalizeFtRow(r) {
   r.perfNote = r.perfNote || (+r.perf ? '114（下）' : '');
   return r;
 }
+function mergeFtMonthRow(defaultRow, savedRow, person) {
+  const merged = Object.assign(defaultRow, savedRow);
+  const legacyMissingInsurance = +person?.grade && savedRow?.insuranceManual !== true &&
+    (+savedRow?.labor || 0) === 0 && (+savedRow?.health || 0) === 0;
+  if (legacyMissingInsurance) {
+    merged.labor = laborEmp(person.grade);
+    merged.health = healthEmp(person.grade) * (1 + (+person.deps || 0));
+  }
+  return merged;
+}
 function allowanceDesc(label, note, amount) { return `${label}${note ? '（' + note + '）' : ''}${amount}`; }
 function ftTotal(r) { return (+r.base || 0) + allowanceTotal(r) + coursePay(r) - (+r.late || 0) + (+r.adj || 0) - (+r.labor || 0) - (+r.health || 0); }
 function saveFt() { const cur = ftRows; markDirty('ft', ftPath(pyMonth.value), () => cur); }
@@ -1848,6 +1858,7 @@ function renderFt() {
   t.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
     const i = +el.dataset.i, k = el.dataset.k, r = ftRows[i];
     r[k] = (el.type === 'number') ? (+el.value || 0) : el.value;
+    if (k === 'labor' || k === 'health') r.insuranceManual = true;
     if (k === 'lateMin' || k === 'perf' || k === 'summer') {
       r.late = Math.round((+r.lateMin || 0) * ((+r.base || 0) + (+r.duty || 0) + (+r.perf || 0) + (+r.summer || 0)) / 14400);
       const lt = el.closest('tr').querySelector('input[data-k="late"]'); if (lt) lt.value = r.late || '';
@@ -2252,7 +2263,7 @@ async function loadMonth() {
   ftRows = ftDefaults();
   (ft || []).forEach(s => {
     const i = ftRows.findIndex(r => r.name === s.name);
-    if (i >= 0) Object.assign(ftRows[i], s); else ftRows.push(s);
+    if (i >= 0) mergeFtMonthRow(ftRows[i], s, staff.full.find(p => p.name === s.name) || {}); else ftRows.push(s);
   });
   ftRows.forEach(normalizeFtRow);
   ptOv = po || {};
