@@ -2054,7 +2054,7 @@ function renderEng() {
           <td style="font-size:12.5px;text-align:right;white-space:nowrap;padding:2px 6px;border:1px solid #e3e8ee">${((d.cnt[c.code] || 0) * c.fee).toLocaleString('zh-TW')}</td></tr>`;
       }).join('') + `</table></div>` +
       `<div style="font-size:12.5px;line-height:2">` +
-      (d.allow ? `<span style="margin-right:10px;color:#1e8449">津貼 +${NT(d.allow)}</span>` : '') +
+      (d.allow ? `<span style="margin-right:10px;color:#1e8449">津貼 +${NT(d.allow)} <button class="del allowDel" data-t="${ti}" title="刪除本月津貼">✕</button></span>` : '') +
       d.extras.map((x, xi) => `<span style="margin-right:10px;color:#1e8449">${esc(x.label)} +${NT(x.amt)} <button class="del" data-t="${ti}" data-xi="${xi}">✕</button></span>`).join('') +
       d.deds.map((x, di) => `<span style="margin-right:10px;color:#c0392b">${esc(x.label)} −<input type="number" data-t="${ti}" data-di="${di}" value="${x.amt || ''}" style="width:56px;${stn}"></span>`).join('') +
       `</div><div style="margin-top:6px;font-size:12.5px">快速加項：
@@ -2109,6 +2109,11 @@ function renderEng() {
       if (d.cnt) delete d.cnt[c.code];
     }
     saveStaff(); saveEng(); renderEng();
+  });
+  w.querySelectorAll('button.allowDel').forEach(b => b.onclick = () => {
+    const p = staff.eng[+b.dataset.t];
+    if (!confirm(`確定刪除 ${p.name} 本月的津貼 ${engData[p.name].allow}？（名冊的津貼欄要一起清空，下個月才不會再帶入）`)) return;
+    engData[p.name].allow = 0; saveEng(); renderEng();
   });
   w.querySelectorAll('button.clsMove').forEach(b => b.onclick = () => {
     const ti = +b.dataset.t, ci = +b.dataset.ci, ni = ci + (+b.dataset.dir);
