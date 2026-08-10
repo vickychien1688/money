@@ -824,8 +824,8 @@ function renderPending() {
     pending.map((p, i) => {
       const sourceAmt = +p.sourceAmt || +p.amt || 0;
       const claimed = pendingClaimed(p), remain = pendingRemain(p);
-      const sourceRow = `<tr class="bad"><td>${esc(p.d)}</td><td class="num">${NT(sourceAmt)}</td><td>${esc(p.last5)}</td><td class="l">銀行原始款</td>
-        <td class="num">${claimed ? `已拆 ${NT(claimed)}<br><span class="hint">待拆 ${NT(remain)}</span>` : '尚未拆分'}</td><td class="l">${esc(p.memo || '')}</td>
+      const sourceRow = `<tr class="bad"><td>${esc(p.d)}</td><td class="num">${NT(sourceAmt)}</td><td>${esc(p.last5)}</td><td class="l"><input data-p-name="${i}" placeholder="學生姓名" style="width:110px;padding:4px;border:1px solid #e67e22;border-radius:5px"></td>
+        <td class="num"><input data-p-amt="${i}" type="number" min="1" max="${remain}" value="${remain}" style="width:84px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"><br><span class="hint">${claimed ? `已拆 ${NT(claimed)}，待拆 ${NT(remain)}` : '尚未拆分'}</span></td><td class="l">${esc(p.memo || '')}</td>
         <td><button class="btn sm green" data-a="add" data-i="${i}">＋ 加入明細</button> <button class="del" data-a="del" data-i="${i}">✕</button></td></tr>`;
       const claimRows = (p.claims || []).map((c, j) => `<tr class="${remain ? '' : 'ok'}"><td></td><td></td><td>${esc(p.last5)}</td><td class="l"><b>${esc(c.name)}</b></td>
         <td class="num">${NT(c.amt)}</td><td class="l">${esc(c.note || `由 ${pendingSourceLabel(p)} 拆帳`)}</td>
@@ -843,15 +843,13 @@ function renderPending() {
     if (b.dataset.a === 'add') {
       const remain = pendingRemain(p);
       if (!remain) return alert('這筆已全部分配，請確認整筆入帳或先刪除一筆拆帳明細');
-      const name = prompt(`這筆 ${NT(p.sourceAmt || p.amt)}（後五碼 ${p.last5}）要分給哪位學生？`);
-      if (!name || !name.trim()) return;
-      const a2 = prompt(`這位學生的待入帳金額（目前尚未分配 ${NT(remain)}）`, String(remain));
-      if (a2 === null) return;
-      const amt = +String(a2).replace(/,/g, '');
+      const name = (t.querySelector(`[data-p-name="${i}"]`)?.value || '').trim();
+      const amt = +(t.querySelector(`[data-p-amt="${i}"]`)?.value || 0);
+      if (!name) return alert('請先填學生姓名');
       if (!amt || amt <= 0 || amt > remain) return alert(`金額要大於 0，且不能超過尚未分配的 ${NT(remain)}`);
       p.claims = p.claims || [];
       p.sourceId = p.sourceId || [p.d || '', p.sourceAmt || p.amt || 0, p.last5 || ''].join('|');
-      p.claims.push({ id: `${p.sourceId}#${Date.now()}-${p.claims.length + 1}`, name: name.trim(), amt, tax: ENTITIES[0].tax, note: `由 ${pendingSourceLabel(p)} 拆帳`, at: stamp(), by: who() });
+      p.claims.push({ id: `${p.sourceId}#${Date.now()}-${p.claims.length + 1}`, name, amt, tax: ENTITIES[0].tax, note: `由 ${pendingSourceLabel(p)} 拆帳`, at: stamp(), by: who() });
       renderPending(); savePending(); return;
     }
     if (b.dataset.a === 'commit') {
