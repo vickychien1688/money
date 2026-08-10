@@ -200,9 +200,9 @@
     <div id="parsePreview" style="margin-top:12px"></div>
   </div>
   <div class="card">
-    <h2>❓ 待認款項（錢進來了，還不知道是誰）</h2>
-    <p class="hint">解析後沒被入帳的存款自動留在這裡（存雲端，不會不見）。查出是誰後按「認領入帳」；確定不是學費的按 ✕ 移除。</p>
-    <table class="ledger" id="pendTable"></table>
+    <h2>❓ 待認款／待入帳明細</h2>
+    <p class="hint">解析後沒被入帳的存款會留在這裡。查出學生後先加入待入帳明細；合併匯款可逐位拆開，系統會保留來源日期、原始金額與後五碼。拆分合計正確後，再一次確認整筆入帳。</p>
+    <div class="scroll-x"><table class="ledger" id="pendTable"></table></div>
   </div>
   <div class="card">
     <h2>📇 家長名冊（姓名 ↔ 匯款後五碼）</h2>
@@ -642,7 +642,7 @@ function markDirty(key, path, getData) {
 let income = [];            // 當月 [{d,name,amt,last5,tax,st,inv,note}]  st: '' 手動 | 'ok' 銀行認列
 let roster = [];            // 家長名冊 [{name,last5,tax}]
 let billing = [];           // 當月應收（米豆繳費單）[{name,due,bills}]
-let pending = [];           // 待認款項 [{d,amt,last5,memo}]
+let pending = [];           // 待認款項 [{d,amt,last5,memo,sourceAmt,claims:[{name,amt,tax,note}]}]
 const ROSTER_PATH = 'roster/list.json';
 const PEND_PATH = 'pending/list.json';
 const billPath = m => 'billing/' + m + '.json';
@@ -806,28 +806,84 @@ document.getElementById('copyInvList').onclick = () => {
 
 /* ===== 待認款項（存雲端） ===== */
 function savePending() { markDirty('pend', PEND_PATH, () => pending); }
+function normalizePending(p) {
+  const sourceAmt = +(p.sourceAmt || p.amt || 0);
+  const sourceId = p.sourceId || [p.d || '', sourceAmt, p.last5 || ''].join('|');
+  const claims = (Array.isArray(p.claims) ? p.claims : []).map((c, i) => ({ ...c, id: c.id || `${sourceId}#${i + 1}` }));
+  return { ...p, amt: sourceAmt, sourceAmt, sourceId, claims };
+}
+function pendingClaimed(p) { return (p.claims || []).reduce((s, c) => s + (+c.amt || 0), 0); }
+function pendingRemain(p) { return Math.max(0, (+p.sourceAmt || +p.amt || 0) - pendingClaimed(p)); }
+function pendingSourceLabel(p) {
+  return `${p.d} ${NT(p.sourceAmt || p.amt)}／後五碼 ${p.last5 || '—'}`;
+}
 function renderPending() {
   const t = document.getElementById('pendTable');
   if (!pending.length) { t.innerHTML = '<tr><td style="color:#789">目前沒有待認款項 🎉</td></tr>'; return; }
-  t.innerHTML = '<tr><th>日期</th><th>金額</th><th>後五碼</th><th>備註/線索</th><th>操作</th></tr>' +
-    pending.map((p, i) => `<tr class="bad"><td>${esc(p.d)}</td><td class="num">${NT(p.amt)}</td><td>${esc(p.last5)}</td><td class="l">${esc(p.memo)}</td>
-      <td><button class="btn sm green" data-a="claim" data-i="${i}">認領入帳</button> <button class="del" data-a="del" data-i="${i}">✕</button></td></tr>`).join('');
-  t.querySelectorAll('button').forEach(b => b.onclick = () => {
+  t.innerHTML = '<tr><th>日期</th><th>原始款項</th><th>後五碼</th><th>學生</th><th>待入帳</th><th>備註/來源</th><th>操作</th></tr>' +
+    pending.map((p, i) => {
+      const sourceAmt = +p.sourceAmt || +p.amt || 0;
+      const claimed = pendingClaimed(p), remain = pendingRemain(p);
+      const sourceRow = `<tr class="bad"><td>${esc(p.d)}</td><td class="num">${NT(sourceAmt)}</td><td>${esc(p.last5)}</td><td class="l">銀行原始款</td>
+        <td class="num">${claimed ? `已拆 ${NT(claimed)}<br><span class="hint">待拆 ${NT(remain)}</span>` : '尚未拆分'}</td><td class="l">${esc(p.memo || '')}</td>
+        <td><button class="btn sm green" data-a="add" data-i="${i}">＋ 加入明細</button> <button class="del" data-a="del" data-i="${i}">✕</button></td></tr>`;
+      const claimRows = (p.claims || []).map((c, j) => `<tr class="${remain ? '' : 'ok'}"><td></td><td></td><td>${esc(p.last5)}</td><td class="l"><b>${esc(c.name)}</b></td>
+        <td class="num">${NT(c.amt)}</td><td class="l">${esc(c.note || `由 ${pendingSourceLabel(p)} 拆帳`)}</td>
+        <td><button class="del" data-a="remove-claim" data-i="${i}" data-j="${j}">✕</button></td></tr>`).join('');
+      const commitRow = (p.claims || []).length ? `<tr><td colspan="4" class="l"><b>${remain ? `還差 ${NT(remain)} 尚未分配` : `✅ 拆分合計與原始款 ${NT(sourceAmt)} 相符`}</b></td>
+        <td class="num">${NT(claimed)}</td><td class="l">共 ${(p.claims || []).length} 位學生</td><td>${remain ? '' : `<button class="btn sm green" data-a="commit" data-i="${i}">✔ 確認整筆入帳</button>`}</td></tr>` : '';
+      return sourceRow + claimRows + commitRow;
+    }).join('');
+  t.querySelectorAll('button').forEach(b => b.onclick = async () => {
     const i = +b.dataset.i, p = pending[i];
     if (b.dataset.a === 'del') { if (!confirm('確定移除？（表示這筆不是學費）')) return; pending.splice(i, 1); renderPending(); savePending(); return; }
-    const name = prompt(`這筆 ${NT(p.amt)}（後五碼 ${p.last5}）是哪位學生？\n（兄弟姊妹合繳請分兩次認領，各填各的金額）`);
-    if (!name || !name.trim()) return;
-    let amt = p.amt;
-    const a2 = prompt('入帳金額（合繳拆帳時改成這位學生的部分）', String(p.amt));
-    if (a2 === null) return;
-    amt = +a2 || p.amt;
-    income.push({ d: p.d, name: name.trim(), amt, last5: p.last5, tax: ENTITIES[0].tax, st: 'ok', inv: '', note: (amt !== p.amt ? `合繳${p.amt}拆帳` : '') + '（認領）', at: stamp(), by: who() });
-    if (p.last5 && !rosterFind(p.last5) && confirm(`把「${name.trim()}＝${p.last5}」存進名冊，下次自動認得？`)) {
-      roster.push({ name: name.trim(), last5: p.last5, tax: ENTITIES[0].tax }); renderRoster(); saveRoster();
+    if (b.dataset.a === 'remove-claim') {
+      p.claims.splice(+b.dataset.j, 1); renderPending(); savePending(); return;
     }
-    if (amt >= p.amt) pending.splice(i, 1);
-    else p.amt -= amt;   /* 拆帳：剩下的留著給另一位認領 */
-    renderIncome(); saveIncome(); renderPending(); savePending();
+    if (b.dataset.a === 'add') {
+      const remain = pendingRemain(p);
+      if (!remain) return alert('這筆已全部分配，請確認整筆入帳或先刪除一筆拆帳明細');
+      const name = prompt(`這筆 ${NT(p.sourceAmt || p.amt)}（後五碼 ${p.last5}）要分給哪位學生？`);
+      if (!name || !name.trim()) return;
+      const a2 = prompt(`這位學生的待入帳金額（目前尚未分配 ${NT(remain)}）`, String(remain));
+      if (a2 === null) return;
+      const amt = +String(a2).replace(/,/g, '');
+      if (!amt || amt <= 0 || amt > remain) return alert(`金額要大於 0，且不能超過尚未分配的 ${NT(remain)}`);
+      p.claims = p.claims || [];
+      p.sourceId = p.sourceId || [p.d || '', p.sourceAmt || p.amt || 0, p.last5 || ''].join('|');
+      p.claims.push({ id: `${p.sourceId}#${Date.now()}-${p.claims.length + 1}`, name: name.trim(), amt, tax: ENTITIES[0].tax, note: `由 ${pendingSourceLabel(p)} 拆帳`, at: stamp(), by: who() });
+      renderPending(); savePending(); return;
+    }
+    if (b.dataset.a === 'commit') {
+      const sourceAmt = +p.sourceAmt || +p.amt || 0;
+      if (pendingClaimed(p) !== sourceAmt) return alert('拆分合計還沒有等於銀行原始款');
+      const claims = p.claims || [];
+      if (!claims.length) return;
+      if (!confirm(`確認把 ${pendingSourceLabel(p)} 拆成 ${claims.length} 筆正式收入？`)) return;
+      b.disabled = true; b.textContent = '入帳中…';
+      try {
+        const targetMonth = p.d.slice(0, 7);
+        const list = targetMonth === incMonth.value ? income : ((await cloudGet(incPath(targetMonth))) || []);
+        const rows = claims.map(c => ({ d: p.d, name: c.name, amt: +c.amt, last5: p.last5, tax: c.tax || ENTITIES[0].tax, st: 'ok', inv: '', note: c.note || `由 ${pendingSourceLabel(p)} 拆帳`, pendingSourceId: p.sourceId, pendingClaimId: c.id, at: stamp(), by: who() }));
+        rows.forEach(r => {
+          const exists = list.some(x => (x.pendingSourceId === r.pendingSourceId && x.pendingClaimId === r.pendingClaimId) ||
+            (!x.pendingClaimId && x.d === r.d && x.name === r.name && +x.amt === r.amt && x.last5 === r.last5 && x.note === r.note));
+          if (!exists) list.push(r);   /* 上次若收入已存、待認款未刪，重按也不會重複 */
+        });
+        await cloudPut(incPath(targetMonth), list);
+        if (targetMonth === incMonth.value) income = list;
+        if (claims.length === 1 && p.last5 && !rosterFind(p.last5) && confirm(`把「${claims[0].name}＝${p.last5}」存進名冊，下次自動認得？`)) {
+          roster.push({ name: claims[0].name, last5: p.last5, tax: claims[0].tax || ENTITIES[0].tax });
+          await cloudPut(ROSTER_PATH, roster); renderRoster();
+        }
+        pending.splice(i, 1);
+        await cloudPut(PEND_PATH, pending);
+        renderIncome(); renderPending();
+      } catch (e) {
+        if (e.message !== 'expired') alert('入帳失敗：' + e.message);
+        b.disabled = false; b.textContent = '✔ 確認整筆入帳';
+      }
+    }
   });
 }
 
@@ -1028,8 +1084,8 @@ async function commitParsed() {
     if (ro) { await cloudPut(ROSTER_PATH, roster); renderRoster(); }
     /* 沒入帳的（且不是重複的）自動存進「待認款項」 */
     const left = parsed.filter(p => !p.sel && !p.dup)
-      .filter(p => !pending.some(q => q.d === p.d && q.amt === p.amt && q.last5 === p.last5))
-      .map(p => ({ d: p.d, amt: p.amt, last5: p.last5, memo: (p.known ? p.name + '？' : '') + (p.line || '').replace(/[\d,]{4,}/g, '').slice(0, 40) }));
+      .filter(p => !pending.some(q => q.d === p.d && (+q.sourceAmt || +q.amt) === p.amt && q.last5 === p.last5))
+      .map(p => normalizePending({ d: p.d, amt: p.amt, sourceAmt: p.amt, last5: p.last5, memo: (p.known ? p.name + '？' : '') + (p.line || '').replace(/[\d,]{4,}/g, '').slice(0, 40), claims: [] }));
     if (left.length) { pending.push(...left); await cloudPut(PEND_PATH, pending); renderPending(); }
     renderIncome();
     document.getElementById('parsePreview').innerHTML =
@@ -2710,7 +2766,7 @@ async function boot() {
   renderRbDraft();
   try {
     const [rb, fx, ro, pd, st, ptOld, lv] = await Promise.all([cloudGet(RB_PATH), cloudGet(FX_PATH), cloudGet(ROSTER_PATH), cloudGet(PEND_PATH), cloudGet(STAFF_PATH), cloudGet(PT_PATH), cloudGet(LEAVE_PATH), loadIncome(), loadPayroll(), loadBilling()]);
-    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || []; pending = pd || [];
+    reimb = rb || []; fixedData = fx || { items: [], paid: {} }; roster = ro || []; pending = (pd || []).map(normalizePending);
     staff = st || { full: [], pt: [], eng: [], makeupRate: 533 };
     leaveData = lv || { records: [], adjust: {} }; leaveData.records = leaveData.records || []; leaveData.adjust = leaveData.adjust || {};
     if (!st && ptOld && ptOld.length) { staff.pt = ptOld.map(t => ({ name: t.name, rate: t.rate, grade: 0, aliases: [] })); saveStaff(); }
