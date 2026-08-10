@@ -895,8 +895,11 @@ function renderIncome() {
       sum += +r.amt || 0;
       const st = r.st === 'ok' ? '✅銀行' : '✍️手動';
       const bills = (billing.find(b => b.name === r.name) || {}).bills || [];
-      const inv = r.inv ? `<a href="#" data-inv="${i}" style="color:#21618c;text-decoration:none">${esc(r.inv)}</a>`
-        : `<button class="btn sm orange" data-inv="${i}">開發票</button>`;
+      const inv = `<span style="display:inline-flex;gap:4px;align-items:center;white-space:nowrap">
+        <input data-inv-input="${i}" value="${esc(r.inv || '')}" placeholder="發票號碼"
+          style="width:112px;padding:5px 6px;border:1px solid #ccd6e0;border-radius:6px;font-size:12px">
+        <button class="btn sm orange" data-inv-save="${i}">${r.inv ? '更新' : '儲存'}</button>
+      </span>`;
       return `<tr class="${r.st === 'ok' ? 'ok' : ''}"><td>${esc(r.d)}</td><td class="l">${esc(r.name)}</td><td style="font-size:11.5px;color:#567">${esc(bills.join(' ')) || '—'}</td><td class="num">${NT(r.amt)}</td><td>${esc(r.last5)}</td><td>${entShort(r.tax)}</td><td>${st}</td><td>${inv}</td><td class="l">${esc(r.note)}</td><td><button class="del" data-i="${i}">✕</button></td></tr>`;
     }).join('') +
     `<tr class="subtotal"><td colspan="3">合計 ${income.length} 筆</td><td class="num">${NT(sum)}</td><td colspan="6"></td></tr>`;
@@ -904,14 +907,18 @@ function renderIncome() {
     if (!confirm('刪除這筆收入？')) return;
     income.splice(+b.dataset.i, 1); renderIncome(); saveIncome();
   });
-  t.querySelectorAll('[data-inv]').forEach(el => el.onclick = e => {
-    e.preventDefault();
-    const i = +el.dataset.inv;
-    const v = prompt('發票號碼（米豆銷帳後會連收據一起產出，把發票號碼貼回這裡；清空可取消）', income[i].inv || '');
-    if (v === null) return;
-    income[i].inv = v.trim();
-    income[i].invAt = v.trim() ? stamp() : ''; income[i].invBy = v.trim() ? who() : '';
+  t.querySelectorAll('[data-inv-save]').forEach(btn => btn.onclick = () => {
+    const i = +btn.dataset.invSave;
+    const v = (t.querySelector(`[data-inv-input="${i}"]`)?.value || '').trim();
+    income[i].inv = v;
+    income[i].invAt = v ? stamp() : ''; income[i].invBy = v ? who() : '';
     renderIncome(); saveIncome();
+  });
+  t.querySelectorAll('[data-inv-input]').forEach(input => input.onkeydown = e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      t.querySelector(`[data-inv-save="${input.dataset.invInput}"]`)?.click();
+    }
   });
   const noInv = income.filter(r => !r.inv);
   document.getElementById('invSummary').innerHTML = noInv.length
