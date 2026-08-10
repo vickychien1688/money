@@ -912,6 +912,12 @@ function parseBankLine(ln) {
   const last5 = five.find(f => rosterFind(f)) || five[five.length - 1];
   return { d, amt: cand[0], last5 };
 }
+/* 玉山匯出檔尾端的「總計／合計」列也會在「存」欄放入總額，不能當成單筆交易。 */
+function isBankSummaryRow(row, dateCol) {
+  const labels = [row[dateCol], ...row.slice(0, 4)]
+    .map(v => String(v || '').replace(/\s/g, ''));
+  return labels.some(v => /^(?:總計|合計|本頁合計|本期合計|交易合計)$/.test(v));
+}
 /* 直接讀玉山網銀匯出的 Excel（.xls/.xlsx/.csv），抓「存」>0 的交易 */
 document.getElementById('bankFile').onchange = async e => {
   const f = e.target.files[0];
@@ -928,8 +934,9 @@ document.getElementById('bankFile').onchange = async e => {
     const col = name => head.findIndex(h => h.includes(name));
     const cD = col('帳務日期'), cIn = head.indexOf('存'), cMemo = col('備註'), cAcct = col('轉出入'), cType = col('摘要');
     parsed = [];
-    let skip = 0;
+    let skip = 0, summarySkip = 0;
     for (const r of rows.slice(hi + 1)) {
+      if (isBankSummaryRow(r, cD)) { summarySkip++; continue; }
       const amt = +String(r[cIn]).replace(/,/g, '');
       if (!amt || amt <= 0) { skip++; continue; }
       let d = String(r[cD]).trim().replace(/\//g, '-');
@@ -944,7 +951,9 @@ document.getElementById('bankFile').onchange = async e => {
         tax: hit ? hit.tax : ENTITIES[0].tax, known: !!hit, dup, sel: !dup,
         addRoster: false, line: `${d.slice(0, 10)} 存入 ${amt.toLocaleString()} 末五碼 ${last5} ${memo} ${String(r[cType] || '')}`.trim() });
     }
-    msg.textContent = `讀到 ${parsed.length} 筆存入（其他 ${skip} 列非存入已略過）`;
+    msg.textContent = `讀到 ${parsed.length} 筆存入` +
+      (summarySkip ? `（已排除 ${summarySkip} 列總計）` : '') +
+      (skip ? `（其他 ${skip} 列非存入已略過）` : '');
     renderParsed(0);
   } catch (err) { msg.textContent = ''; alert('讀檔失敗：' + err.message); }
   e.target.value = '';
