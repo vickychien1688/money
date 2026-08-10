@@ -1243,13 +1243,16 @@ function canonName(raw) {
 const gv = id => document.getElementById(id).value.trim();
 const gclr = ids => ids.forEach(id => document.getElementById(id).value = '');
 const parseAlias = s => s.split(/[,、\s]+/).map(x => x.trim()).filter(Boolean);
-const parsePairs = s => s.split(/[,、]+/).map(x => x.trim()).filter(Boolean).map(seg => {
-  const dm = seg.split(/[@＠]/); const days = (dm[1] || '').trim();
-  const p = dm[0].split(/[:：]/);
-  const o = { code: p[0].trim(), fee: +(p[1] || 1000) || 1000 };
-  if (days) o.days = days;
-  return o;
-});
+const parsePairs = s => {
+  const seen = new Set();   /* 同名班級只留第一個，避免重複算薪 */
+  return s.split(/[,、]+/).map(x => x.trim()).filter(Boolean).map(seg => {
+    const dm = seg.split(/[@＠]/); const days = (dm[1] || '').trim();
+    const p = dm[0].split(/[:：]/);
+    const o = { code: p[0].trim(), fee: +(p[1] || 1000) || 1000 };
+    if (days) o.days = days;
+    return o;
+  }).filter(o => seen.has(o.code) ? false : (seen.add(o.code), true));
+};
 const WD = { '日': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
 const WDN = ['日', '一', '二', '三', '四', '五', '六'];
 function schedDates(days, m) {   /* '一四' → 當月所有週一與週四的日期 */
@@ -1321,9 +1324,7 @@ function renderStaff() {
       else p[k] = inp.checked;
     }
     else if (k === 'engcls') {
-      const cls = parsePairs(inp.value);
-      if (!cls.length) { alert('班級不能空白（格式：1B@一四, 活動策畫:800）'); renderStaff(); return; }
-      p.classes = cls;
+      p.classes = parsePairs(inp.value);   /* 可清空：只領津貼的老師班級留空即可 */
     }
     else if (inp.type === 'number') p[k] = +inp.value || 0;
     else p[k] = inp.value.trim();
@@ -2048,7 +2049,7 @@ function renderEng() {
           const o = on.has(dt); const wk = (dow === 0 || dow === 6);
           cells += `<td class="schip" data-t="${ti}" data-cls="${esc(c.code)}" data-d="${dt}" style="cursor:pointer;min-width:20px;height:25px;border:1px solid #e3e8ee;text-align:center;font-size:12px;background:${o ? '#3f9e6e' : (wk ? '#f7f7f7' : '#fff')};color:#fff">${o ? '✓' : ''}</td>`;
         }
-        return `<tr><td style="font-size:12.5px;padding:2px 8px;white-space:nowrap;border:1px solid #e3e8ee"><b class="clsEdit" data-t="${ti}" data-ci="${cx}" title="點一下改班名或堂費" style="cursor:pointer;border-bottom:1px dashed #2980b9">${esc(c.code)}</b> <span style="color:#888;font-size:11px">${c.fee}${c.days ? '·' + esc(c.days) : ''}</span> <button class="del clsDel" data-t="${ti}" data-ci="${cx}" title="刪除這個班">✕</button></td>${cells}
+        return `<tr><td style="font-size:12.5px;padding:2px 8px;white-space:nowrap;border:1px solid #e3e8ee"><button class="clsMove" data-t="${ti}" data-ci="${cx}" data-dir="-1" title="往上移" ${cx === 0 ? 'disabled' : ''} style="cursor:pointer;border:none;background:none;padding:0 1px;color:${cx === 0 ? '#ccc' : '#2980b9'}">↑</button><button class="clsMove" data-t="${ti}" data-ci="${cx}" data-dir="1" title="往下移" ${cx === p.classes.length - 1 ? 'disabled' : ''} style="cursor:pointer;border:none;background:none;padding:0 1px;color:${cx === p.classes.length - 1 ? '#ccc' : '#2980b9'}">↓</button> <b class="clsEdit" data-t="${ti}" data-ci="${cx}" title="點一下改班名或堂費" style="cursor:pointer;border-bottom:1px dashed #2980b9">${esc(c.code)}</b> <span style="color:#888;font-size:11px">${c.fee}${c.days ? '·' + esc(c.days) : ''}</span> <button class="del clsDel" data-t="${ti}" data-ci="${cx}" title="刪除這個班">✕</button></td>${cells}
           <td style="font-size:12.5px;text-align:center;font-weight:bold;color:#1e6e1e;border:1px solid #e3e8ee">${d.cnt[c.code] || 0}</td>
           <td style="font-size:12.5px;text-align:right;white-space:nowrap;padding:2px 6px;border:1px solid #e3e8ee">${((d.cnt[c.code] || 0) * c.fee).toLocaleString('zh-TW')}</td></tr>`;
       }).join('') + `</table></div>` +
@@ -2103,9 +2104,18 @@ function renderEng() {
     const p = staff.eng[ti], c = p.classes[ci], d = engData[p.name];
     if (!confirm(`確定刪除 ${p.name} 的「${c.code}」班？（這班已點的 ${(d.cnt || {})[c.code] || 0} 堂會一起刪掉）`)) return;
     p.classes.splice(ci, 1);
-    if (d.sched) delete d.sched[c.code];
-    if (d.cnt) delete d.cnt[c.code];
+    if (!p.classes.some(x => x.code === c.code)) {   /* 還有同名班（舊資料重複）就保留打勾紀錄 */
+      if (d.sched) delete d.sched[c.code];
+      if (d.cnt) delete d.cnt[c.code];
+    }
     saveStaff(); saveEng(); renderEng();
+  });
+  w.querySelectorAll('button.clsMove').forEach(b => b.onclick = () => {
+    const ti = +b.dataset.t, ci = +b.dataset.ci, ni = ci + (+b.dataset.dir);
+    const cls = staff.eng[ti].classes;
+    if (ni < 0 || ni >= cls.length) return;
+    [cls[ci], cls[ni]] = [cls[ni], cls[ci]];   /* 薪資單的班級順序跟著名冊走，換這裡就一起換 */
+    saveStaff(); renderEng();
   });
   w.querySelectorAll('button[data-act="addcls"]').forEach(b => b.onclick = () => {
     const p = staff.eng[+b.dataset.t];
