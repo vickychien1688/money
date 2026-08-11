@@ -2076,6 +2076,25 @@ function engDefaults(p) {
   (p.extraDeds || []).forEach(d => deds.push({ label: d.label, amt: +d.amt || 0 }));
   return { cnt: {}, extras: [], allow: p.allow || 0, deds };
 }
+/* 每人固定顯示勞健保三格；當月存檔缺的項目從名冊補回（手動改過的金額不動） */
+const ENG_FIXED_DEDS = ['勞保', '健保', '眷屬健保'];
+function mergeEngMonth(p, saved) {
+  const d = Object.assign(engDefaults(p), saved || {});
+  d.deds = Array.isArray(d.deds) ? d.deds : [];
+  const def = engDefaults(p).deds;
+  ENG_FIXED_DEDS.forEach(label => {
+    if (!d.deds.some(x => x.label === label)) {
+      const fromRoster = def.find(x => x.label === label);
+      d.deds.push({ label, amt: fromRoster ? fromRoster.amt : 0 });
+    }
+  });
+  def.forEach(x => { if (!d.deds.some(y => y.label === x.label)) d.deds.push({ label: x.label, amt: x.amt }); });
+  d.deds.sort((a, b) => {
+    const ia = ENG_FIXED_DEDS.indexOf(a.label), ib = ENG_FIXED_DEDS.indexOf(b.label);
+    return (ia < 0 ? ENG_FIXED_DEDS.length : ia) - (ib < 0 ? ENG_FIXED_DEDS.length : ib);
+  });
+  return d;
+}
 function engTotal(p, d) {
   const sub = (p.classes || []).reduce((s, c) => s + (+d.cnt[c.code] || 0) * c.fee, 0);
   return sub + (+d.allow || 0) + d.extras.reduce((s, x) => s + (+x.amt || 0), 0) - d.deds.reduce((s, x) => s + (+x.amt || 0), 0);
@@ -2353,7 +2372,7 @@ async function loadMonth() {
   ftRows.forEach(normalizeFtRow);
   ptOv = po || {};
   engData = {};
-  staff.eng.forEach(p => { engData[p.name] = Object.assign(engDefaults(p), (en || {})[p.name] || {}); });
+  staff.eng.forEach(p => { engData[p.name] = mergeEngMonth(p, (en || {})[p.name]); });
   await loadScheduleImages(si || []);
   renderMonth();
 }
