@@ -408,8 +408,11 @@
 
   <div class="card payroll-view pv-run payroll-detail">
     <h2>🧾 薪資單（發給員工）</h2>
-    <p class="hint">一人一頁，開新視窗後按列印（或「另存為 PDF」），就能發給員工；最下面有簽收欄。內容照上面三區目前的數字帶入。</p>
+    <p class="hint">一人一頁，開新視窗後按列印（或「另存為 PDF」），就能發給員工；最下面有簽收欄。內容照上面三區目前的數字帶入。也可以直接寄到老師信箱（信箱在「員工設定」填）；建議先寄測試信給自己看版面。</p>
     <button class="btn" id="slipExport">🧾 產生本月薪資單</button>
+    <button class="btn" id="slipMailTest">📧 寄測試信給自己</button>
+    <button class="btn green" id="slipMail">📧 寄薪資單到老師信箱</button>
+    <div id="slipMailMsg" class="hint" style="margin-top:6px"></div>
   </div>
 
   <div class="card payroll-view pv-staff">
@@ -418,6 +421,12 @@
       <p class="hint" style="margin-top:8px">姓名填本名（申報用）；打卡系統寫法不同的用「別名」對應（例：陳弈安的別名填 陳奕安）。
         <label class="btn sm" style="cursor:pointer">📂 匯入名冊 JSON<input type="file" id="staffFile" accept=".json" style="display:none"></label>
         <span id="staffMsg" style="font-size:12.5px;color:#1e8449"></span></p>
+      <details style="margin:4px 0 10px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:bold">📧 整批貼上老師 Email（從 Excel 複製「姓名、Email」兩欄貼進來）</summary>
+        <textarea id="emailBulk" rows="5" placeholder="龐若妤&#9;yu10180120@gmail.com&#10;韋雯臣&#9;wenchen19950807@gmail.com" style="width:100%;max-width:520px;margin:6px 0;padding:6px;border:1px solid #c6cfda;border-radius:6px;font-size:12.5px;box-sizing:border-box"></textarea>
+        <div><button class="btn sm" id="emailBulkApply">套用到名冊</button>
+        <span id="emailBulkMsg" style="font-size:12.5px;color:#1e8449"></span></div>
+      </details>
       <h2 style="margin-top:10px">正職</h2>
       <p class="hint" style="margin:4px 0 8px;color:#8a4b08">調整底薪或固定職務加給時，系統會依 115 年級距檢查並提醒；你確認後才會一併更新投保級距。未更新的差異會持續以紅字顯示。</p>
       <table class="ledger" id="stFull"></table>
@@ -1338,7 +1347,7 @@ function renderStaff() {
   const ist = w => `style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"`;
   const isl = w => `style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px;font-size:12px"`;
   const f = document.getElementById('stFull');
-  f.innerHTML = '<tr><th>姓名</th><th>到職日</th><th>底薪</th><th>職務加給</th><th>上班時間</th><th>投保級距</th><th>眷屬</th><th>扣款(自動)</th><th>備註</th><th></th></tr>' +
+  f.innerHTML = '<tr><th>姓名</th><th>到職日</th><th>底薪</th><th>職務加給</th><th>上班時間</th><th>投保級距</th><th>眷屬</th><th>扣款(自動)</th><th>Email</th><th>備註</th><th></th></tr>' +
     staff.full.map((p, i) => {
       const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade) * (1 + (p.deps || 0))}` : '—';
       const suggested = ftSuggestedGrade(p);
@@ -1352,11 +1361,12 @@ function renderStaff() {
       <td><input type="number" data-g="full" data-i="${i}" data-k="grade" value="${p.grade || ''}" placeholder="沒保留空" ${ist(76)}></td>
       <td><input type="number" data-g="full" data-i="${i}" data-k="deps" value="${p.deps || ''}" ${ist(40)}></td>
       <td class="l" style="font-size:12px">${ded}${gradeWarn}</td>
+      <td><input type="email" data-g="full" data-i="${i}" data-k="email" value="${esc(p.email || '')}" placeholder="薪資單寄送用" ${isl(150)}></td>
       <td><input data-g="full" data-i="${i}" data-k="note" value="${esc(p.note || '')}" ${isl(110)}></td>
       <td><button class="del" data-g="full" data-i="${i}">✕</button></td></tr>`;
     }).join('');
   const t = document.getElementById('stPt');
-  t.innerHTML = `<tr><th>姓名</th><th>到職日</th><th>每週約定時數</th><th>在職</th><th>時薪</th><th>有投保</th><th>依${INSURANCE_TABLE_YEAR}年自動</th><th>手動級距</th><th>勞保扣額</th><th>別名</th><th></th></tr>` +
+  t.innerHTML = `<tr><th>姓名</th><th>到職日</th><th>每週約定時數</th><th>在職</th><th>時薪</th><th>有投保</th><th>依${INSURANCE_TABLE_YEAR}年自動</th><th>手動級距</th><th>勞保扣額</th><th>Email</th><th>別名</th><th></th></tr>` +
     staff.pt.map((p, i) => `<tr style="${p.active === false ? 'opacity:.5;background:#f3f3f3' : ''}"><td class="l">${esc(p.name)}${p.active === false ? '<br><span style="font-size:10.5px;color:#888">已離職</span>' : ''}</td>
       <td><input type="date" data-g="pt" data-i="${i}" data-k="onboard" value="${esc(p.onboard || '')}" ${isl(112)}></td>
       <td><input type="number" data-g="pt" data-i="${i}" data-k="weeklyHours" value="${p.weeklyHours || ''}" min="0" max="40" step="0.5" ${ist(64)}></td>
@@ -1366,10 +1376,11 @@ function renderStaff() {
       <td><input type="checkbox" data-g="pt" data-i="${i}" data-k="autoGrade" ${p.autoGrade === false ? '' : 'checked'} ${p.grade ? '' : 'disabled'} aria-label="${esc(p.name)}自動投保級距"></td>
       <td><input type="number" data-g="pt" data-i="${i}" data-k="grade" value="${p.grade || ''}" placeholder="未投保" ${p.autoGrade === false && p.grade ? '' : 'disabled'} ${ist(76)}></td>
       <td class="num">${p.grade ? NT(laborEmp(p.grade)) : '—'}</td>
+      <td><input type="email" data-g="pt" data-i="${i}" data-k="email" value="${esc(p.email || '')}" placeholder="薪資單寄送用" ${isl(150)}></td>
       <td><input data-g="pt" data-i="${i}" data-k="aliases" value="${esc((p.aliases || []).join('、'))}" placeholder="打卡系統的其他寫法" ${isl(130)}></td>
       <td><button class="del" data-g="pt" data-i="${i}">✕</button></td></tr>`).join('');
   const e = document.getElementById('stEng');
-  e.innerHTML = '<tr><th>姓名</th><th>中文名(申報用)</th><th>班級（堂費）</th><th>津貼</th><th>級距</th><th>眷屬</th><th>扣款(自動)</th><th>別名</th><th></th></tr>' +
+  e.innerHTML = '<tr><th>姓名</th><th>中文名(申報用)</th><th>班級（堂費）</th><th>津貼</th><th>級距</th><th>眷屬</th><th>扣款(自動)</th><th>Email</th><th>別名</th><th></th></tr>' +
     staff.eng.map((p, i) => {
       const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade)}${p.deps ? '＋眷' + (healthEmp(p.grade) * p.deps) : ''}` : '—';
       return `<tr><td class="l">${esc(p.name)}</td>
@@ -1379,6 +1390,7 @@ function renderStaff() {
       <td><input type="number" data-g="eng" data-i="${i}" data-k="grade" value="${p.grade || ''}" ${ist(70)}></td>
       <td><input type="number" data-g="eng" data-i="${i}" data-k="deps" value="${p.deps || ''}" ${ist(40)}></td>
       <td class="l" style="font-size:12px">${ded}${(p.extraDeds || []).map(d => '＋' + d.label + d.amt).join('')}</td>
+      <td><input type="email" data-g="eng" data-i="${i}" data-k="email" value="${esc(p.email || '')}" placeholder="薪資單寄送用" ${isl(150)}></td>
       <td><input data-g="eng" data-i="${i}" data-k="aliases" value="${esc((p.aliases || []).join('、'))}" ${isl(110)}></td>
       <td><button class="del" data-g="eng" data-i="${i}">✕</button></td></tr>`;
     }).join('');
@@ -1444,6 +1456,26 @@ document.getElementById('staffFile').onchange = async e => {
     staff = j; saveStaff(); renderStaff(); await loadMonth();
     document.getElementById('staffMsg').textContent = '✔ 名冊已匯入';
   } catch (err) { alert('名冊匯入失敗：' + err.message); }
+};
+document.getElementById('emailBulkApply').onclick = () => {
+  const lines = document.getElementById('emailBulk').value.split('\n').map(x => x.trim()).filter(Boolean);
+  if (!lines.length) return alert('先貼上「姓名、Email」，一行一人（直接從 Excel 複製兩欄即可）');
+  const ok = [], noName = []; let noMail = 0;
+  lines.forEach(line => {
+    const em = (line.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/) || [])[0];
+    if (!em) { noMail++; return; }
+    const rawName = line.replace(em, '').replace(/[\t,，、;；]+/g, ' ').trim();
+    const cn = canonName(rawName);
+    if (!cn) { noName.push(rawName || line); return; }
+    for (const g of ['full', 'pt', 'eng']) {
+      const p = (staff[g] || []).find(x => x.name === cn);
+      if (p) { p.email = em; ok.push(cn); break; }
+    }
+  });
+  if (ok.length) { saveStaff(); renderStaff(); }
+  document.getElementById('emailBulkMsg').textContent = `✔ 已套用 ${ok.length} 位`
+    + (noName.length ? `｜名冊找不到這些人：${noName.join('、')}（名字要跟名冊一樣或加別名）` : '')
+    + (noMail ? `｜有 ${noMail} 行沒有 Email，略過` : '');
 };
 
 /* ---- 特休管理：正職＋PT；由管理者登記或匯入米豆核准紀錄 ---- */
@@ -2257,8 +2289,8 @@ document.getElementById('engWrite').onclick = () => {
   renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
 };
 
-/* ---- 薪資單匯出（一人一頁，列印或存 PDF 發給員工） ---- */
-document.getElementById('slipExport').onclick = () => {
+/* ---- 薪資單：列印與 Email 寄送共用同一份內容 ---- */
+function buildSlips() {
   const m = pyMonth.value; const [yy, mo] = m.split('-');
   const slips = [];
   const row = (label, amt, neg) => ((+amt) ? `<tr><td>${label}</td><td style="text-align:right">${neg ? '−' : ''}${Math.abs(+amt).toLocaleString('zh-TW')}</td></tr>` : '');
@@ -2270,7 +2302,7 @@ document.getElementById('slipExport').onclick = () => {
   };
   ftRows.forEach(r => {
     if (!ftTotal(r)) return;
-    slips.push({ name: r.name, type: '正職', total: ftTotal(r), extraTitle: '特休狀態', extra: leaveBlock(r.name), body:
+    slips.push({ name: r.name, email: (staff.full.find(x => x.name === r.name) || {}).email || '', type: '正職', total: ftTotal(r), extraTitle: '特休狀態', extra: leaveBlock(r.name), body:
       row('底薪', r.base) + row(esc('職務加給' + (r.dutyNote ? '（' + r.dutyNote + '）' : '')), r.duty) + row(esc('暑假加給' + (r.summerNote ? '（' + r.summerNote + '）' : '')), r.summer) + row(esc('績效獎金' + (r.perfNote ? '（' + r.perfNote + '）' : '')), r.perf) +
       (r.allowanceItems || []).map(x => row(esc((x.name || '其他加給') + (x.detail ? '（' + x.detail + '）' : '')), x.amount)).join('') +
       (r.courseItems || []).map(x => row(`${esc(x.name || '額外課程')} ${x.hours || 0} 時 × ${x.rate || 0}`, courseItemPay(x))).join('') +
@@ -2291,7 +2323,7 @@ document.getElementById('slipExport').onclick = () => {
         `<tr><th colspan="3">合計</th><th style="text-align:right">${r.hrs}</th>${hasS ? '<th></th>' : ''}<th></th></tr></table>` +
         (hasS ? '<p style="font-size:11px;color:#888;margin:3px 0 0">計薪時數照實際打卡；班表僅供對照</p>' : '')
       : '';
-    slips.push({ name: r.name, type: 'PT', total: r.net, extraTitle: '打卡與特休明細', extra: pd + leaveBlock(r.name), body:
+    slips.push({ name: r.name, email: (staff.pt.find(x => x.name === r.name) || {}).email || '', type: 'PT', total: r.net, extraTitle: '打卡與特休明細', extra: pd + leaveBlock(r.name), body:
       `<tr><td>時數 ${r.hrs} 時 × 時薪 ${r.rate}</td><td style="text-align:right">${r.pay.toLocaleString('zh-TW')}</td></tr>` +
       r.courseItems.map(x => row(`${esc(x.name || '額外課程')} ${x.hours || 0} 時 × ${x.rate || 0}`, courseItemPay(x))).join('') +
       row(esc(r.extraNote || '加項'), r.extra) + row('勞保', r.labor, true) });
@@ -2319,13 +2351,12 @@ document.getElementById('slipExport').onclick = () => {
       }
       return `<tr><td style="text-align:left;white-space:nowrap">${esc(c.code)}</td>${cells}<td><b>${d.cnt[c.code]}</b></td></tr>`;
     }).join('');
-    slips.push({ name: p.cname ? p.cname + '（' + p.name + '）' : p.name, type: '英文老師', total: tot, body: b,
+    slips.push({ name: p.cname ? p.cname + '（' + p.name + '）' : p.name, email: p.email || '', type: '英文老師', total: tot, body: b,
       extraTitle: '上課日曆（✓＝有上課）', extra: calRows ? `<table class="cal"><tr>${hdr}</tr>${calRows}</table>` : '' });
   });
-  if (!slips.length) return alert('本月沒有薪資資料，先把上面的薪資算好再匯出。');
-  const w = window.open('', '_blank');
-  if (!w) return alert('瀏覽器擋了彈出視窗，請允許這個網站的彈出視窗再按一次。');
-  w.document.write(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>${m} 薪資單</title><style>
+  return { m, yy, mo, slips };
+}
+const SLIP_CSS = `
     body{font-family:'PingFang TC','Microsoft JhengHei',sans-serif;margin:0;color:#222}
     .slip{page-break-after:always;padding:40px 48px;box-sizing:border-box}
     h1{font-size:19px;text-align:center;margin:0 0 2px}
@@ -2343,18 +2374,76 @@ document.getElementById('slipExport').onclick = () => {
     .cal th{background:#f0f5fa;font-weight:normal}
     .cal .wk{background:#f5f5f5;color:#aaa}
     .cal .on{background:#3f9e6e;color:#fff;font-weight:bold;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    @media print{.np{display:none}}
-  </style></head><body>
-  <div class="np"><button onclick="print()" style="padding:8px 22px;font-size:15px;cursor:pointer">🖨 列印／另存 PDF（一人一頁）</button></div>` +
-    slips.map(s => `<div class="slip">
+    @media print{.np{display:none}}`;
+function slipHtml(s, yy, mo, forMail) {
+  return `<div class="slip">
     <h1>家功場放學趣有限公司　薪資單</h1>
     <div class="sub">${+yy} 年 ${+mo} 月｜${s.type}</div>
     <p style="font-size:15px"><b>姓名：${esc(s.name)}</b></p>
     <table>${s.body}<tr class="tot"><td>實發金額</td><td style="text-align:right">NT$ ${s.total.toLocaleString('zh-TW')}</td></tr></table>
     ${s.extra ? `<p style="font-size:13px;margin:18px 0 2px;color:#555"><b>${s.extraTitle}</b></p>${s.extra}` : ''}
-    <p class="sign">員工簽收：＿＿＿＿＿＿＿＿＿＿　　日期：＿＿＿＿＿＿＿＿</p>
-  </div>`).join('') + '</body></html>');
+    ${forMail ? '<p class="sign">此為電子薪資單，明細若有疑問請直接與負責人聯繫。</p>' : '<p class="sign">員工簽收：＿＿＿＿＿＿＿＿＿＿　　日期：＿＿＿＿＿＿＿＿</p>'}
+  </div>`;
+}
+document.getElementById('slipExport').onclick = () => {
+  const { m, yy, mo, slips } = buildSlips();
+  if (!slips.length) return alert('本月沒有薪資資料，先把上面的薪資算好再匯出。');
+  const w = window.open('', '_blank');
+  if (!w) return alert('瀏覽器擋了彈出視窗，請允許這個網站的彈出視窗再按一次。');
+  w.document.write(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>${m} 薪資單</title><style>${SLIP_CSS}
+  </style></head><body>
+  <div class="np"><button onclick="print()" style="padding:8px 22px;font-size:15px;cursor:pointer">🖨 列印／另存 PDF（一人一頁）</button></div>` +
+    slips.map(s => slipHtml(s, yy, mo, false)).join('') + '</body></html>');
   w.document.close();
+};
+
+/* ---- 薪資單 Email 寄送（Supabase Edge Function send-payslip ＋ Resend） ---- */
+const mailDoc = inner => `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><style>${SLIP_CSS}</style></head><body>${inner}</body></html>`;
+const mailedPath = m => 'payroll/mailed-' + m + '.json';
+async function postSlipMails(mails) {
+  const res = await fetch(SB_URL + '/functions/v1/send-payslip', {
+    method: 'POST', headers: sbHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ mails }),
+  });
+  const t = await res.text(); let d = {}; try { d = JSON.parse(t); } catch (e) { /* 非 JSON 回應直接當錯誤文字 */ }
+  if (res.status === 404) throw new Error('寄信後台還沒部署（send-payslip），先完成 Resend 設定');
+  if (needsRefresh(res.status, t)) { if (await refreshToken()) return postSlipMails(mails); showLogin('登入已過期，請重新登入'); throw new Error('expired'); }
+  if (!res.ok || d.error) throw new Error(d.error || t || '寄送失敗');
+  return d;
+}
+function slipMailUi(busy, msg) {
+  document.getElementById('slipMailTest').disabled = busy;
+  document.getElementById('slipMail').disabled = busy;
+  document.getElementById('slipMailMsg').textContent = msg || '';
+}
+document.getElementById('slipMailTest').onclick = async () => {
+  const { yy, mo, slips } = buildSlips();
+  if (!slips.length) return alert('本月沒有薪資資料，先把上面的薪資算好再寄。');
+  if (!sbEmail) return alert('讀不到你的登入信箱，請重新登入');
+  if (!confirm(`把 ${+yy} 年 ${+mo} 月全部 ${slips.length} 張薪資單合成一封測試信，寄到你自己的信箱 ${sbEmail}？（不會寄給老師）`)) return;
+  slipMailUi(true, '測試信寄送中…');
+  try {
+    await postSlipMails([{ to: sbEmail, subject: `【測試】${+yy} 年 ${+mo} 月薪資單版面預覽`,
+      html: mailDoc(slips.map(s => slipHtml(s, yy, mo, true)).join('<hr style="border:none;border-top:2px dashed #bbb;margin:10px 0">')) }]);
+    slipMailUi(false, `✔ 測試信已寄到 ${sbEmail}，去信箱看版面`);
+  } catch (err) { slipMailUi(false, ''); alert('測試信寄送失敗：' + err.message); }
+};
+document.getElementById('slipMail').onclick = async () => {
+  const { m, yy, mo, slips } = buildSlips();
+  if (!slips.length) return alert('本月沒有薪資資料，先把上面的薪資算好再寄。');
+  const ready = slips.filter(s => s.email), missing = slips.filter(s => !s.email);
+  if (!ready.length) return alert('名冊裡還沒有任何老師的 Email，先到「員工設定」填（或用整批貼上）。');
+  const prev = await cloudGet(mailedPath(m)).catch(() => null);
+  let msg = `確定把 ${+yy} 年 ${+mo} 月薪資單分別寄給 ${ready.length} 位老師？\n\n` + ready.map(s => `${s.name} → ${s.email}`).join('\n');
+  if (missing.length) msg += `\n\n⚠ 以下 ${missing.length} 位沒填 Email，這次會跳過：\n` + missing.map(s => s.name).join('、');
+  if (prev && prev.at) msg += `\n\n⚠ 本月已在 ${prev.at} 由 ${prev.by || '?'} 寄過一次，確定要再寄嗎？`;
+  if (!confirm(msg)) return;
+  slipMailUi(true, `寄送中…（共 ${ready.length} 封）`);
+  try {
+    await postSlipMails(ready.map(s => ({ to: s.email, subject: `家功場放學趣 ${+yy} 年 ${+mo} 月薪資單（${s.name}）`, html: mailDoc(slipHtml(s, yy, mo, true)) })));
+    await cloudPut(mailedPath(m), { at: stamp(), by: who(), sent: ready.map(s => ({ name: s.name, email: s.email })), skipped: missing.map(s => s.name) });
+    slipMailUi(false, `✔ ${stamp()} 已寄出 ${ready.length} 封` + (missing.length ? `；跳過（沒 Email）：${missing.map(s => s.name).join('、')}` : ''));
+    alert(`✔ 薪資單已寄出 ${ready.length} 封` + (missing.length ? `\n跳過（沒 Email）：${missing.map(s => s.name).join('、')}` : ''));
+  } catch (err) { slipMailUi(false, ''); alert('寄送失敗：' + err.message + '\n（這批都沒有寄出，修正後可整批重寄）'); }
 };
 
 /* ---- 當月載入 ---- */
