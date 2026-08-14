@@ -1873,7 +1873,7 @@ function mergeFtMonthRow(defaultRow, savedRow, person) {
   return merged;
 }
 function allowanceDesc(label, note, amount) { return `${label}${note ? '（' + note + '）' : ''}${amount}`; }
-function ftTotal(r) { return (+r.base || 0) + allowanceTotal(r) + coursePay(r) - (+r.late || 0) + (+r.adj || 0) - (+r.labor || 0) - (+r.health || 0); }
+function ftTotal(r) { return Math.round((+r.base || 0) + allowanceTotal(r) + coursePay(r) - (+r.late || 0) + (+r.adj || 0) - (+r.labor || 0) - (+r.health || 0)); }
 function saveFt() { const cur = ftRows; markDirty('ft', ftPath(pyMonth.value), () => cur); }
 function renderFt() {
   const t = document.getElementById('ftTable');
@@ -2031,7 +2031,7 @@ function ptRows() {
     const pay = R1(hrs * p.rate);
     const grade = p.grade ? (p.autoGrade === false ? +p.grade : insuranceGrade115(pay + course + extra, true)) : 0;
     const labor = (o.labor != null) ? +o.labor : laborEmp(grade);
-    const net = (pay + course + extra) > 0 ? R1(pay + course + extra - labor) : 0;   /* 當月沒薪資就不扣勞保 */
+    const net = (pay + course + extra) > 0 ? Math.round(pay + course + extra - labor) : 0;   /* 當月沒薪資就不扣勞保；實發四捨五入取整 */
     return { name: p.name, rate: p.rate, hrs, auto, courseItems, course, extra, extraNote: o.extraNote || '', grade, labor, pay, net };
   });
 }
@@ -2129,7 +2129,7 @@ function mergeEngMonth(p, saved) {
 }
 function engTotal(p, d) {
   const sub = (p.classes || []).reduce((s, c) => s + (+d.cnt[c.code] || 0) * c.fee, 0);
-  return sub + (+d.allow || 0) + d.extras.reduce((s, x) => s + (+x.amt || 0), 0) - d.deds.reduce((s, x) => s + (+x.amt || 0), 0);
+  return Math.round(sub + (+d.allow || 0) + d.extras.reduce((s, x) => s + (+x.amt || 0), 0) - d.deds.reduce((s, x) => s + (+x.amt || 0), 0));
 }
 function saveEng() { const cur = engData; markDirty('eng', engPath(pyMonth.value), () => cur); }
 function renderEng() {
