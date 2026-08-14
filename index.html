@@ -412,6 +412,7 @@
     <button class="btn" id="slipExport">🧾 產生本月薪資單</button>
     <button class="btn" id="slipMailTest">📧 寄測試信給自己</button>
     <button class="btn green" id="slipMail">📧 寄薪資單到老師信箱</button>
+    <div style="margin-top:8px">補寄單人：<select id="slipResendSel" style="padding:5px;border:1px solid #c6cfda;border-radius:5px"><option value="">選老師…</option></select> <button class="btn" id="slipResendBtn">📧 補寄這位</button></div>
     <div id="slipMailMsg" class="hint" style="margin-top:6px"></div>
   </div>
 
@@ -2426,6 +2427,29 @@ document.getElementById('slipMailTest').onclick = async () => {
       html: mailDoc(slips.map(s => slipHtml(s, yy, mo, true)).join('<hr style="border:none;border-top:2px dashed #bbb;margin:10px 0">')) }]);
     slipMailUi(false, `✔ 測試信已寄到 ${sbEmail}，去信箱看版面`);
   } catch (err) { slipMailUi(false, ''); alert('測試信寄送失敗：' + err.message); }
+};
+document.getElementById('slipResendSel').onfocus = () => {
+  const sel = document.getElementById('slipResendSel'), cur = sel.value;
+  const { slips } = buildSlips();
+  sel.innerHTML = '<option value="">選老師…</option>' + slips.map(s => `<option value="${esc(s.name)}">${esc(s.name)}${s.email ? '' : '（名冊沒Email）'}</option>`).join('');
+  sel.value = cur;
+};
+document.getElementById('slipResendBtn').onclick = async () => {
+  const nm = document.getElementById('slipResendSel').value;
+  if (!nm) return alert('先從下拉選單選一位老師');
+  const { m, yy, mo, slips } = buildSlips();
+  const s = slips.find(x => x.name === nm);
+  if (!s) return alert('這位這個月沒有薪資單');
+  if (!s.email) return alert(`${s.name} 的名冊還沒填 Email，先到「員工設定」填好再補寄`);
+  if (!confirm(`補寄 ${+yy} 年 ${+mo} 月薪資單給 ${s.name}（${s.email}）？`)) return;
+  slipMailUi(true, `補寄中…（${s.name}）`);
+  try {
+    await postSlipMails([{ to: s.email, subject: `家功場放學趣 ${+yy} 年 ${+mo} 月薪資單（${s.name}）`, html: mailDoc(slipHtml(s, yy, mo, true)) }]);
+    const prev = await cloudGet(mailedPath(m)).catch(() => null) || { sent: [], skipped: [] };
+    (prev.resent = prev.resent || []).push({ name: s.name, email: s.email, at: stamp(), by: who() });
+    await cloudPut(mailedPath(m), prev);
+    slipMailUi(false, `✔ ${stamp()} 已補寄給 ${s.name}（${s.email}）`);
+  } catch (err) { slipMailUi(false, ''); alert('補寄失敗：' + err.message); }
 };
 document.getElementById('slipMail').onclick = async () => {
   const { m, yy, mo, slips } = buildSlips();
