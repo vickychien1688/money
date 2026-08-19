@@ -324,7 +324,7 @@
     <p class="hint">把打卡系統匯出的「員工簽到記錄」Excel 直接選進來，正職的遲到分鐘與 PT 的時數就會自動算好。重新匯入只會取代這個檔案裡有的人，其他人的打卡不會不見。</p>
     <details style="margin-top:6px">
       <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📥 手動補登打卡（點開貼上）</summary>
-      <p class="hint" style="margin-top:8px">一行一筆，兩種格式都可以：「姓名 8/5 13:00 17:30」（自動算時數）或「姓名 8/5 4.5」（直接給時數）。只會取代貼進來那些人的打卡。</p>
+      <p class="hint" style="margin-top:8px">一行一筆，兩種格式都可以：「姓名 8/5 13:00 17:30」（自動算時數）或「姓名 8/5 4.5」（直接給時數）。只會更新貼進來的那幾天，同一個人其他天的打卡不會不見。</p>
       <textarea id="ptPunch" style="width:100%;min-height:90px" placeholder="小美 8/5 13:00 17:30&#10;小美 8/7 4.5"></textarea>
       <div style="margin-top:6px"><button class="btn sm" id="ptImport">匯入打卡</button> <span id="ptMsg" style="font-size:12.5px;color:#1e8449"></span></div>
     </details>
@@ -1669,9 +1669,16 @@ document.getElementById('ptImport').onclick = () => {
     (agg[name] = agg[name] || []).push({ d, in: tin, out: tout, hrs, leave: '' });
   }
   if (!Object.keys(agg).length) return alert('沒解析出任何打卡（格式：姓名 8/5 13:00 17:30 或 姓名 8/5 4.5）');
-  Object.keys(agg).forEach(n => punch[n] = agg[n]);
+  /* 只更新貼進來的那幾天：同一天覆蓋，其他天原封不動保留 */
+  let kept = 0;
+  Object.keys(agg).forEach(n => {
+    const keepRows = (punch[n] || []).filter(r => !agg[n].some(x => x.d === r.d));
+    kept += keepRows.length;
+    punch[n] = keepRows.concat(agg[n]).sort((a, b) => String(a.d).localeCompare(String(b.d)));
+  });
   const cur = punch; markDirty('punch', punchPath(m), () => cur);
-  document.getElementById('ptMsg').textContent = `匯入 ${Object.keys(agg).length} 人、${Object.values(agg).flat().length} 筆` + (bad ? `（${bad} 行看不懂略過）` : '');
+  document.getElementById('ptMsg').textContent = `匯入 ${Object.keys(agg).length} 人、${Object.values(agg).flat().length} 筆` +
+    (kept ? `（這些人原本其他 ${kept} 天的打卡保留）` : '') + (bad ? `（${bad} 行看不懂略過）` : '');
   document.getElementById('ptPunch').value = '';
   renderMonth();
 };
