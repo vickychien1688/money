@@ -2773,7 +2773,9 @@ async function buildReport() {
 
 /* ===== 老闆日報（只有 Vicky 帳號顯示） ===== */
 const OWNER = 'vickychien127@gmail.com';
-const ADMIN_EMAILS = [OWNER].map(x => x.toLowerCase());
+/* 會計人員：可用整套系統，但看不到老闆日報分頁。加人時這裡與 Supabase 的四條 policy 都要改 */
+const ACCOUNTANTS = ['a-chuen@yahoo.com.tw'];
+const ADMIN_EMAILS = [OWNER, ...ACCOUNTANTS].map(x => x.toLowerCase());
 document.getElementById('bossGen').onclick = buildBoss;
 async function buildBoss() {
   const d = document.getElementById('bossDate').value;
