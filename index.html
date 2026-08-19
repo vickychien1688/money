@@ -321,7 +321,7 @@
     <div class="monthpick">月份：<input type="month" id="pyMonth">
       <label class="btn sm" style="cursor:pointer">📂 匯入打卡檔（員工簽到記錄 Excel）<input type="file" id="punchFile" accept=".xlsx,.xls" style="display:none"></label>
       <span id="punchMsg" style="font-size:12.5px;color:#1e8449"></span></div>
-    <p class="hint">把打卡系統匯出的「員工簽到記錄」Excel 直接選進來，正職的遲到分鐘與 PT 的時數就會自動算好。重新匯入會取代本月打卡。</p>
+    <p class="hint">把打卡系統匯出的「員工簽到記錄」Excel 直接選進來，正職的遲到分鐘與 PT 的時數就會自動算好。重新匯入只會取代這個檔案裡有的人，其他人的打卡不會不見。</p>
     <details style="margin-top:6px">
       <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📥 手動補登打卡（點開貼上）</summary>
       <p class="hint" style="margin-top:8px">一行一筆，兩種格式都可以：「姓名 8/5 13:00 17:30」（自動算時數）或「姓名 8/5 4.5」（直接給時數）。只會取代貼進來那些人的打卡。</p>
@@ -1633,9 +1633,21 @@ document.getElementById('punchFile').onchange = async e => {
       const cn = canonName(raw);
       if (cn) out[cn] = recs; else unknown.push(raw);
     }
-    punch = out; const cur = punch; markDirty('punch', punchPath(m), () => cur);
+    /* 只取代這個檔案裡有的人（跟手動補登一致），沒出現的人保留原本的打卡；
+       同一天若手動調過遲到分鐘，那個調整也留著，不會被重匯洗掉 */
+    Object.keys(out).forEach(n => {
+      const old = punch[n] || [];
+      out[n].forEach(r => {
+        const prev = old.find(x => x.d === r.d && x.lateOv !== undefined);
+        if (prev) r.lateOv = prev.lateOv;
+      });
+      punch[n] = out[n];
+    });
+    const cur = punch; markDirty('punch', punchPath(m), () => cur);
     lateChecked = false;
+    const kept = Object.keys(punch).length - Object.keys(out).length;
     document.getElementById('punchMsg').textContent = `✔ 匯入 ${Object.keys(out).length} 人` +
+      (kept > 0 ? `（另有 ${kept} 人不在這個檔案裡，原本的打卡保留）` : '') +
       (unknown.length ? `；名冊查無（略過）：${unknown.join('、')}` : '') + (skipped ? `；${skipped} 格不是 ${m} 的略過` : '');
     renderMonth();
   } catch (err) { alert('打卡檔讀取失敗：' + err.message); }
