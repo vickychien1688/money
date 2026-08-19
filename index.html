@@ -1589,13 +1589,28 @@ document.getElementById('punchFile').onchange = async e => {
   const file = e.target.files[0]; if (!file) return; e.target.value = '';
   const m = pyMonth.value;
   try {
-    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
-    const hdr = rows[0] || []; const dayCols = {};
-    hdr.forEach((h, c) => { const mt = /^(\d{2})\/(\d{2})/.exec(String(h).trim()); if (mt) dayCols[c] = [mt[1], mt[2]]; });
-    if (!Object.keys(dayCols).length) throw new Error('第一列找不到日期欄（07/01 這種格式）');
+    /* 表頭列不一定在第一列（上面可能有標題），日期也可能是 7/1、2026/07/01 或真正的日期儲存格 */
+    const pad2 = n => String(n).padStart(2, '0');
+    const cellDay = v => {
+      if (v instanceof Date) return [pad2(v.getMonth() + 1), pad2(v.getDate())];
+      const s = String(v == null ? '' : v).trim();
+      let mt = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/.exec(s);
+      if (mt) return [pad2(+mt[2]), pad2(+mt[3])];
+      mt = /^(\d{1,2})[\/\-.](\d{1,2})/.exec(s);
+      if (mt) return [pad2(+mt[1]), pad2(+mt[2])];
+      return null;
+    };
+    let hdrRow = 0, dayCols = {};
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const cols = {};
+      (rows[i] || []).forEach((h, c) => { const d = cellDay(h); if (d) cols[c] = d; });
+      if (Object.keys(cols).length > Object.keys(dayCols).length) { dayCols = cols; hdrRow = i; }
+    }
+    if (Object.keys(dayCols).length < 5) throw new Error('前十列都找不到日期欄（要有 07/01 或 7/1 這種日期標題），確認這是「員工簽到記錄」的匯出檔');
     const out = {}; const unknown = []; let skipped = 0;
-    for (let i = 1; i < rows.length; i++) {
+    for (let i = hdrRow + 1; i < rows.length; i++) {
       if ((rows[i] || [])[1] !== '簽到退') continue;
       const raw = String(rows[i][0] || '').trim();
       if (!raw) continue;   /* 沒名字的簽到退列是上一個人的續列，會在下面一起收 */
