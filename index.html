@@ -1272,6 +1272,9 @@ const mins = t => { const p = String(t).split(':'); return +p[0] * 60 + +p[1]; }
 /* 勞健保員工負擔（照會計師的級距表：勞保11.5%＋就保1%各取20%分別四捨五入；健保5.17%×30%，級距最低29,500） */
 const laborEmp = g => g ? Math.round(g * 0.115 * 0.2) + Math.round(g * 0.01 * 0.2) : 0;
 const healthEmp = g => g ? Math.round(Math.max(g, 29500) * 0.0517 * 0.3) : 0;
+/* 健保投保薪資：未填(null)＝沿用勞保級距；填 0＝沒投健保。勞保上限 45800，健保沒有，所以要能分開設 */
+const healthBase = p => (p == null) ? 0 : ((p.hgrade == null || p.hgrade === '') ? (+p.grade || 0) : (+p.hgrade || 0));
+const healthOf = p => healthEmp(healthBase(p));
 /* 115年1月1日起適用；116年正式表公告前沿用最近已公告年度，不預猜級距 */
 const INSURANCE_TABLE_YEAR = 115;
 const FT_GRADES_115 = [29500,30300,31800,33300,34800,36300,38200,40100,42000,43900,45800];
@@ -1367,9 +1370,10 @@ function renderStaff() {
   const ist = w => `style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right"`;
   const isl = w => `style="width:${w}px;padding:4px;border:1px solid #c6cfda;border-radius:5px;font-size:12px"`;
   const f = document.getElementById('stFull');
-  f.innerHTML = '<tr><th>姓名</th><th>到職日</th><th>底薪</th><th>職務加給</th><th>上班時間</th><th>投保級距</th><th>眷屬</th><th>扣款(自動)</th><th>Email</th><th>備註</th><th></th></tr>' +
+  f.innerHTML = '<tr><th>姓名</th><th>到職日</th><th>底薪</th><th>職務加給</th><th>上班時間</th><th>投保級距</th><th>健保投保薪資</th><th>眷屬</th><th>扣款(自動)</th><th>Email</th><th>備註</th><th></th></tr>' +
     staff.full.map((p, i) => {
-      const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade) * (1 + (p.deps || 0))}` : '—';
+      const hb = healthOf(p) * (1 + (p.deps || 0));
+      const ded = p.grade ? `勞${laborEmp(p.grade)}` + (hb ? `＋健${hb}` : '＋未投健保') : '—';
       const suggested = ftSuggestedGrade(p);
       const gradeWarn = suggested && +p.grade !== suggested
         ? `<div style="margin-top:3px;color:#c0392b;font-weight:bold;font-size:11px">⚠ 建議 ${NT(suggested)}<br><span style="font-weight:normal">依底薪＋固定職務加給</span></div>` : '';
@@ -1379,6 +1383,7 @@ function renderStaff() {
       <td><input type="number" data-g="full" data-i="${i}" data-k="duty" value="${p.duty || ''}" ${ist(60)}></td>
       <td><input data-g="full" data-i="${i}" data-k="shift" value="${esc(p.shift || '')}" placeholder="14:00" style="width:58px;padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:center"></td>
       <td><input type="number" data-g="full" data-i="${i}" data-k="grade" value="${p.grade || ''}" placeholder="沒保留空" ${ist(76)}></td>
+      <td><input type="number" data-g="full" data-i="${i}" data-k="hgrade" value="${p.hgrade == null ? '' : p.hgrade}" placeholder="同勞保" title="留空＝比照勞保級距；填 0＝沒投健保" ${ist(84)}></td>
       <td><input type="number" data-g="full" data-i="${i}" data-k="deps" value="${p.deps || ''}" ${ist(40)}></td>
       <td class="l" style="font-size:12px">${ded}${gradeWarn}</td>
       <td><input type="email" data-g="full" data-i="${i}" data-k="email" value="${esc(p.email || '')}" placeholder="薪資單寄送用" ${isl(150)}></td>
@@ -1400,14 +1405,16 @@ function renderStaff() {
       <td><input data-g="pt" data-i="${i}" data-k="aliases" value="${esc((p.aliases || []).join('、'))}" placeholder="打卡系統的其他寫法" ${isl(130)}></td>
       <td><button class="del" data-g="pt" data-i="${i}">✕</button></td></tr>`).join('');
   const e = document.getElementById('stEng');
-  e.innerHTML = '<tr><th>姓名</th><th>中文名(申報用)</th><th>班級（堂費）</th><th>津貼</th><th>級距</th><th>眷屬</th><th>扣款(自動)</th><th>Email</th><th>別名</th><th></th></tr>' +
+  e.innerHTML = '<tr><th>姓名</th><th>中文名(申報用)</th><th>班級（堂費）</th><th>津貼</th><th>級距</th><th>健保投保薪資</th><th>眷屬</th><th>扣款(自動)</th><th>Email</th><th>別名</th><th></th></tr>' +
     staff.eng.map((p, i) => {
-      const ded = p.grade ? `勞${laborEmp(p.grade)}＋健${healthEmp(p.grade)}${p.deps ? '＋眷' + (healthEmp(p.grade) * p.deps) : ''}` : '—';
+      const he = healthOf(p);
+      const ded = p.grade ? `勞${laborEmp(p.grade)}` + (he ? `＋健${he}${p.deps ? '＋眷' + (he * p.deps) : ''}` : '＋未投健保') : '—';
       return `<tr><td class="l">${esc(p.name)}</td>
       <td><input data-g="eng" data-i="${i}" data-k="cname" value="${esc(p.cname || '')}" placeholder="給會計師看的" ${isl(88)}></td>
       <td><input data-g="eng" data-i="${i}" data-k="engcls" value="${esc((p.classes || []).map(c => c.code + (c.fee === 1000 ? '' : ':' + c.fee) + (c.days ? '@' + c.days : '')).join(', '))}" ${isl(200)}></td>
       <td><input type="number" data-g="eng" data-i="${i}" data-k="allow" value="${p.allow || ''}" ${ist(56)}></td>
       <td><input type="number" data-g="eng" data-i="${i}" data-k="grade" value="${p.grade || ''}" ${ist(70)}></td>
+      <td><input type="number" data-g="eng" data-i="${i}" data-k="hgrade" value="${p.hgrade == null ? '' : p.hgrade}" placeholder="同勞保" title="留空＝比照勞保級距；填 0＝沒投健保" ${ist(84)}></td>
       <td><input type="number" data-g="eng" data-i="${i}" data-k="deps" value="${p.deps || ''}" ${ist(40)}></td>
       <td class="l" style="font-size:12px">${ded}${(p.extraDeds || []).map(d => '＋' + d.label + d.amt).join('')}</td>
       <td><input type="email" data-g="eng" data-i="${i}" data-k="email" value="${esc(p.email || '')}" placeholder="薪資單寄送用" ${isl(150)}></td>
@@ -1428,6 +1435,7 @@ function renderStaff() {
     else if (k === 'engcls') {
       p.classes = parsePairs(inp.value);   /* 可清空：只領津貼的老師班級留空即可 */
     }
+    else if (k === 'hgrade') p.hgrade = inp.value.trim() === '' ? null : (+inp.value || 0);   /* 空白＝沿用勞保級距，0＝沒投健保 */
     else if (inp.type === 'number') p[k] = +inp.value || 0;
     else p[k] = inp.value.trim();
     if (inp.dataset.g === 'full' && (k === 'base' || k === 'duty')) {
@@ -1900,7 +1908,7 @@ function bindPunchDetail(tbl, getRow, colspan, editable) {
 function ftDefaults() {
   return staff.full.map(p => ({ name: p.name, base: p.base, duty: p.duty || 0, dutyNote: '', summer: 0, summerNote: '', perf: 0, perfNote: '',
     allowanceItems: [], courseItems: [], extra: 0, extraNote: '', lateMin: 0, late: 0, adj: 0,
-    labor: laborEmp(p.grade), health: healthEmp(p.grade) * (1 + (p.deps || 0)), note: '' }));
+    labor: laborEmp(p.grade), health: healthOf(p) * (1 + (p.deps || 0)), note: '' }));
 }
 function courseItemPay(x) { return R1((+x.hours || 0) * (+x.rate || 0)); }
 function coursePay(r) { return R1((r.courseItems || []).reduce((s, x) => s + courseItemPay(x), 0)); }
@@ -1922,7 +1930,7 @@ function mergeFtMonthRow(defaultRow, savedRow, person) {
     (+savedRow?.labor || 0) === 0 && (+savedRow?.health || 0) === 0;
   if (legacyMissingInsurance) {
     merged.labor = laborEmp(person.grade);
-    merged.health = healthEmp(person.grade) * (1 + (+person.deps || 0));
+    merged.health = healthOf(person) * (1 + (+person.deps || 0));
   }
   return merged;
 }
@@ -2156,8 +2164,8 @@ function engDefaults(p) {
   const deds = [];
   if (p.grade) {
     deds.push({ label: '勞保', amt: laborEmp(p.grade) });
-    deds.push({ label: '健保', amt: healthEmp(p.grade) });
-    if (p.deps) deds.push({ label: '眷屬健保', amt: healthEmp(p.grade) * p.deps });
+    if (healthOf(p)) deds.push({ label: '健保', amt: healthOf(p) });
+    if (p.deps && healthOf(p)) deds.push({ label: '眷屬健保', amt: healthOf(p) * p.deps });
   }
   (p.extraDeds || []).forEach(d => deds.push({ label: d.label, amt: +d.amt || 0 }));
   return { cnt: {}, extras: [], allow: p.allow || 0, deds };
