@@ -2672,7 +2672,23 @@ async function loadMonth() {
   engData = {};
   staff.eng.forEach(p => { engData[p.name] = mergeEngMonth(p, (en || {})[p.name]); });
   await loadScheduleImages(si || []);
+  freezeLockedMonth();
   renderMonth();
+}
+/* 已經發過薪的月份，把當下算出來的勞健保釘進存檔，之後改名冊就不會回頭改它。
+   只補「還沒釘過」的欄位，已經手動改過的值不動。 */
+function freezeLockedMonth() {
+  if (!monthLocked()) return;
+  let changed = false;
+  ptRows().forEach(r => {
+    const o = (ptOv[r.name] = ptOv[r.name] || {});
+    if (o.labor == null) { o.labor = r.labor; changed = true; }
+    if (o.health == null) { o.health = r.health; changed = true; }
+  });
+  if (changed) savePtOv();
+  let ftChanged = false;
+  ftRows.forEach(r => { if (r.insuranceManual !== true) { r.insuranceManual = true; ftChanged = true; } });
+  if (ftChanged) saveFt();
 }
 function renderMonth() { renderFt(); renderPtCalc(); renderEng(); renderLeave(); renderPayrollAssistant(); }
 
