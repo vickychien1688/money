@@ -393,6 +393,7 @@
 
   <div class="card payroll-view pv-run payroll-detail payroll-group pg-ft">
     <h2>🧑‍🏫 正職薪資（底薪＋額外課程＋加給－遲到－出缺勤）</h2>
+    <div id="ftLockBanner"></div>
     <div id="ftInfo" class="hint"></div>
     <table class="ledger" id="ftTable" style="margin-top:8px"></table>
     <div style="margin-top:10px">
@@ -402,7 +403,8 @@
   </div>
 
   <div class="card payroll-view pv-run payroll-detail payroll-group pg-pt">
-    <h2>⏱ PT 薪資（打卡薪資＋額外課程薪資－勞保）</h2>
+    <h2>⏱ PT 薪資（打卡薪資＋額外課程薪資－勞健保）</h2>
+      <div id="ptLockBanner"></div>
     <div id="ptInfo" class="hint"></div>
     <table class="ledger" id="ptCalc" style="margin-top:8px"></table>
     <div style="margin-top:10px"><button class="btn green" id="ptWrite">✍ 寫入本月薪資申報</button></div>
@@ -2029,8 +2031,14 @@ function mergeFtMonthRow(defaultRow, savedRow, person) {
 function allowanceDesc(label, note, amount) { return `${label}${note ? '（' + note + '）' : ''}${amount}`; }
 function ftTotal(r) { return Math.round((+r.base || 0) + allowanceTotal(r) + coursePay(r) - (+r.late || 0) + (+r.adj || 0) - (+r.labor || 0) - (+r.health || 0)); }
 function saveFt() { const cur = ftRows; markDirty('ft', ftPath(pyMonth.value), () => cur); }
+function lockBanner() {
+  return monthLocked()
+    ? `<div style="margin:6px 0;padding:8px 10px;border:1px solid #f0c36d;border-radius:8px;background:#fdf6e3;font-size:12.5px;color:#8a4b08">🔒 <b>${pyMonth.value} 已經寫入薪資申報</b>，每個人的時數與勞健保都已經定版，之後改員工名冊或重匯打卡都不會回頭改這個月。要改某一個人，直接改他那一列就好，不會動到別人。</div>`
+    : '';
+}
 function renderFt() {
   const t = document.getElementById('ftTable');
+  const fb = document.getElementById('ftLockBanner'); if (fb) fb.innerHTML = lockBanner();
   document.getElementById('ftInfo').textContent = staff.full.length
     ? '每人一張薪資卡。平常確認底薪、加給、額外課程與實發金額即可；遲到、出缺勤及勞健保收在「調整與扣款」中。'
     : '先到下方「員工名冊設定」加入正職員工。';
@@ -2128,6 +2136,7 @@ function renderFt() {
   bindPunchDetail(t, i => ({ name: ftRows[i].name, shift: (staff.full.find(x => x.name === ftRows[i].name) || {}).shift }), 1);
 }
 document.getElementById('ftLate').onclick = () => {
+  if (!confirmRecalc('重新從打卡算遲到')) return;
   let n = 0; const miss = [], part = [];
   ftRows.forEach(r => {
     const p = staff.full.find(x => x.name === r.name) || {};
@@ -2156,6 +2165,8 @@ document.getElementById('ftWrite').onclick = () => {
   if (!rows.length) return alert('沒有可寫入的薪資');
   if (!confirm(`確定把 ${rows.length} 位正職薪資寫入 ${pyMonth.value} 申報？（會取代上次寫入的正職明細）`)) return;
   payroll = payroll.filter(r => r.src !== 'ft');
+  rows.forEach(r => { r.insuranceManual = true; });   /* 已寫入申報＝這個月定版，之後改名冊不會回頭改它 */
+  saveFt();
   rows.forEach(r => {
     const parts = [];
     if (+r.duty) parts.push(allowanceDesc('職務加給', r.dutyNote, r.duty));
@@ -2192,8 +2203,16 @@ function ptRows() {
   });
 }
 function savePtOv() { const cur = ptOv; markDirty('ptov', ptOvPath(pyMonth.value), () => cur); }
+/* 這個月已經寫入申報（＝薪資已經發出去）就算定版，重算類的操作要先問過 */
+function monthLocked() { return (payroll || []).some(r => r.src === 'ft' || r.src === 'pt' || r.src === 'eng'); }
+function confirmRecalc(what) {
+  if (!monthLocked()) return true;
+  return confirm(`⚠ ${pyMonth.value} 已經寫入薪資申報（薪資單可能已經發出去了）。\n\n` +
+    `${what}會改掉這個月已經算好的數字，跟當初發出去的對不起來。\n\n真的要重算嗎？`);
+}
 function renderPtCalc() {
   const t = document.getElementById('ptCalc');
+  const pb = document.getElementById('ptLockBanner'); if (pb) pb.innerHTML = lockBanner();
   document.getElementById('ptInfo').textContent = staff.pt.length
     ? '一般工時照打卡；有額外家教或小團班的人按「＋加入課程」，自行填課程名稱、時數與時薪。可加入多筆，系統會合併計薪。'
     : '先到下方「員工名冊設定」加入 PT。';
@@ -2251,6 +2270,14 @@ document.getElementById('ptWrite').onclick = () => {
   if (!rows.length) return alert('沒有可寫入的薪資');
   if (!confirm(`確定把 ${rows.length} 位 PT 薪資寫入 ${pyMonth.value} 申報？（會取代上次寫入的 PT 明細）\n` + rows.map(r => `${r.name}：一般${NT(r.pay)}${r.course ? `＋額外課程${NT(r.course)}` : ''}＝實發${NT(r.net)}`).join('\n'))) return;
   payroll = payroll.filter(r => r.src !== 'pt');
+  /* 已寫入申報＝這個月定版：時數與勞健保釘死，之後改名冊或重匯打卡都不會回頭改它 */
+  rows.forEach(r => {
+    const o = (ptOv[r.name] = ptOv[r.name] || {});
+    if (o.hrs == null) o.hrs = r.hrs;
+    if (o.labor == null) o.labor = r.labor;
+    if (o.health == null) o.health = r.health;
+  });
+  savePtOv();
   rows.forEach(r => payroll.push({ who: r.name, cat: '薪資', amt: r.net, tax: PY_TAX,
     note: `PT ${r.hrs}時×${r.rate}` + r.courseItems.filter(x => courseItemPay(x)).map(x => `＋${x.name || '額外課程'}${x.hours}時×${x.rate}`).join('') + (r.extra ? `＋${r.extraNote || '加項'}${r.extra}` : '') + (r.labor ? `－勞保${r.labor}` : '') + (r.health ? `－健保${r.health}` : ''), at: stamp(), by: who(), src: 'pt' }));
   renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
