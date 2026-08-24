@@ -329,8 +329,17 @@
       <div style="margin-top:6px"><button class="btn sm" id="ptImport">匯入打卡</button> <span id="ptMsg" style="font-size:12.5px;color:#1e8449"></span></div>
     </details>
     <details style="margin-top:6px">
-      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📅 暑假班表（算正職遲到＋明細對照用，點開貼上）</summary>
-      <div style="margin-top:10px;padding:10px;border:1px solid #d8dee6;border-radius:8px;background:#f8fafc">
+      <summary style="cursor:pointer;font-size:13.5px;color:#2980b9;font-weight:bold">📅 排班表（算正職遲到＋明細對照用，點開匯入）</summary>
+      <div style="margin-top:10px;padding:10px;border:1px solid #b7dfc4;border-radius:8px;background:#f1f9f3">
+        <b style="font-size:13.5px">📂 匯入排班表 Excel（最快，建議用這個）</b>
+        <p class="hint" style="margin:4px 0 8px">把排班表的 Excel 檔直接選進來就好，正職與兼職一起讀；一個檔裡有很多週、或分成好幾個工作表，都會一次讀完。姓名要跟員工名冊一樣（後面括號的綽號沒關係，例如「連育平（泡泡）」可以）。重匯只會蓋掉檔案裡有的那幾天。</p>
+        <label class="btn sm green" style="display:inline-block;cursor:pointer">選擇排班表 Excel
+          <input type="file" id="schedFile" accept=".xlsx,.xls,.csv" style="display:none">
+        </label>
+        <span id="schedFileMsg" style="font-size:12.5px;color:#1e8449;margin-left:6px"></span>
+        <div id="schedFileDetail" style="font-size:12px;margin-top:8px;line-height:1.6"></div>
+      </div>
+      <div style="margin-top:6px;padding:10px;border:1px solid #d8dee6;border-radius:8px;background:#f8fafc">
         <b style="font-size:13.5px">📷 上傳班表圖片作為對照</b>
         <p class="hint" style="margin:4px 0 8px">可一次選多張。圖片會依月份保存在雲端，核對打卡或薪資時隨時放大查看；上傳圖片不會直接改薪資數字。</p>
         <label class="btn sm" style="display:inline-block;cursor:pointer">選擇班表圖片
@@ -339,7 +348,7 @@
         <span id="schedImageMsg" style="font-size:12.5px;color:#1e8449;margin-left:6px"></span>
         <div id="schedImageGallery" class="schedule-gallery"></div>
       </div>
-      <p class="hint" style="margin-top:8px">一行一筆：PT 填時段「陳弈安 8/3 08:00-12:00」；正職填班別「黃宜婷 8/3 早班」（早班7:45／一般班8:45／導師值班8:45／晚班10:45／校外教學班8:15）；排休填「假」。貼新的一週會跟已存的合併。<b>PT 計薪時數一律照打卡</b>（沒打卡不給、有打卡照打卡實際時間；班表只當對照，因為常臨時異動）。</p>
+      <p class="hint" style="margin-top:8px"><b>沒有 Excel 檔時才用下面這個手動貼上。</b>一行一筆：PT 填時段「陳弈安 8/3 08:00-12:00」；正職填班別「黃宜婷 8/3 早班」（早班7:45／一般班8:45／導師值班8:45／晚班10:45／校外教學班8:15）；排休填「假」。貼新的一週會跟已存的合併。<b>PT 計薪時數一律照打卡</b>（沒打卡不給、有打卡照打卡實際時間；班表只當對照，因為常臨時異動）。</p>
       <textarea id="schedPaste" style="width:100%;min-height:90px" placeholder="陳弈安 8/3 08:00-12:00&#10;黃宜婷 8/3 早班"></textarea>
       <div style="margin-top:6px">
         <button class="btn sm" id="schedImport">匯入班表</button>
@@ -1774,6 +1783,88 @@ function renderSchedInfo() {
   const dates = [...new Set(names.flatMap(n => Object.keys(sched[n])))].sort();
   el.textContent = `本月班表：${names.length} 人、涵蓋 ${dates.length} 天（${dates[0].slice(5).replace('-', '/')}～${dates[dates.length - 1].slice(5).replace('-', '/')}）`;
 }
+/* ---- 排班表 Excel 匯入：一列一個人、一欄一天，正職填班別、兼職填時段 ---- */
+function schedApply(found, m) {
+  let n = 0, other = 0; const days = new Set();
+  for (const r of found) {
+    if (r.date.slice(0, 7) !== m) { other++; continue; }
+    (sched[r.name] = sched[r.name] || {})[r.date] = r.val;
+    days.add(r.date); n++;
+  }
+  if (n) { saveSched(); renderSchedInfo(); renderMonth(); }
+  return { n, other, days: [...days].sort() };
+}
+document.getElementById('schedFile').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return; e.target.value = '';
+  const m = pyMonth.value, msg = document.getElementById('schedFileMsg'), det = document.getElementById('schedFileDetail');
+  msg.textContent = '讀取中…'; det.innerHTML = '';
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const pad2 = v => String(v).padStart(2, '0');
+    /* 儲存格 → [月,日]；含冒號的先排除，才不會把「7:45-17:00」這種班別時間當成日期 */
+    const cellDay = v => {
+      if (v instanceof Date) return [pad2(v.getMonth() + 1), pad2(v.getDate())];
+      const t = String(v == null ? '' : v).trim();
+      if (!t || t.includes(':')) return null;
+      let mt = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/.exec(t);
+      if (mt) return [pad2(+mt[2]), pad2(+mt[3])];
+      mt = /^(\d{1,2})\s*月\s*(\d{1,2})\s*日?$/.exec(t);
+      if (mt) return [pad2(+mt[1]), pad2(+mt[2])];
+      mt = /^(\d{1,2})[\/\-.](\d{1,2})$/.exec(t);
+      if (mt) return [pad2(+mt[1]), pad2(+mt[2])];
+      return null;
+    };
+    const dayColsOf = row => {
+      const cols = {};
+      (row || []).forEach((h, c) => { const d = cellDay(h); if (d) cols[c] = d; });
+      return Object.keys(cols).length >= 2 ? cols : null;   /* 至少兩個日期才算是日期列 */
+    };
+    /* 姓名：先照原字，再去掉括號綽號，最後試括號裡的字（可能是別名） */
+    const nameOf = raw => {
+      const t = String(raw == null ? '' : raw).trim().replace(/\s+/g, '');
+      if (!t) return null;
+      let cn = canonName(t); if (cn) return { name: cn };
+      const bare = t.replace(/[（(][^）)]*[）)]/g, '').trim();
+      if (bare && bare !== t) { cn = canonName(bare); if (cn) return { name: cn }; }
+      const inner = (t.match(/[（(]([^）)]+)[）)]/) || [])[1];
+      if (inner) { cn = canonName(inner.trim()); if (cn) return { name: cn }; }
+      return { unknown: bare || t };
+    };
+    const found = [], unknown = new Set(), odd = [];
+    let dateRows = 0;
+    for (const sn of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: false, defval: '' });
+      for (let i = 0; i < rows.length; i++) {
+        const dayCols = dayColsOf(rows[i]);
+        if (!dayCols) continue;
+        dateRows++;
+        for (let j = i + 1; j < rows.length && !dayColsOf(rows[j]); j++) {
+          const who = nameOf((rows[j] || [])[0]);
+          if (!who) continue;
+          const cells = Object.keys(dayCols).map(c => ({ c, v: String((rows[j] || [])[c] || '').trim().replace(/\s+/g, '') })).filter(x => x.v);
+          if (!cells.length) continue;
+          if (who.unknown) { unknown.add(who.unknown); continue; }
+          for (const { c, v } of cells) {
+            const date = m.slice(0, 4) + '-' + dayCols[c][0] + '-' + dayCols[c][1];
+            if (v !== '假' && shiftStart(v) == null) odd.push(`${who.name} ${+dayCols[c][0]}/${+dayCols[c][1]}「${v}」`);
+            found.push({ name: who.name, date, val: v });
+          }
+        }
+      }
+    }
+    if (!dateRows) throw new Error('整份檔案都找不到日期列。班表要有一列是日期標題（例如「8月17日」或「8/17」），日期下面每一列一個人');
+    if (!found.length) throw new Error('有讀到日期，但沒有對到任何名冊上的人。確認姓名欄在最左邊，而且寫法跟「員工名冊設定」一致');
+    const res = schedApply(found, m);
+    const ppl = new Set(found.filter(r => r.date.slice(0, 7) === m).map(r => r.name)).size;
+    msg.textContent = res.n ? `✔ 匯入 ${res.n} 筆（${ppl} 人）` : '沒有匯入任何資料';
+    const parts = [];
+    if (res.days.length) parts.push(`<div style="color:#1e8449">涵蓋 ${res.days.length} 天：${res.days[0].slice(5).replace('-', '/')}～${res.days[res.days.length - 1].slice(5).replace('-', '/')}</div>`);
+    if (res.other) parts.push(`<div style="color:#8a4b08">有 ${res.other} 格不是 ${m} 的，已略過（要匯別的月份，先把上面的月份切過去再選一次檔案）</div>`);
+    if (unknown.size) parts.push(`<div style="color:#c0392b">名冊查無、整列略過：${[...unknown].join('、')}<br><span style="color:#888">先到下面「員工名冊設定」把人加進去，或在名冊的「別名」填上班表寫法，再匯一次</span></div>`);
+    if (odd.length) parts.push(`<div style="color:#c0392b">這 ${odd.length} 格看不懂，資料有存下來但算遲到時會被跳過：${odd.slice(0, 12).join('、')}${odd.length > 12 ? ' …' : ''}<br><span style="color:#888">班別要寫早班／一般班／導師值班／晚班／校外教學班，時段要寫成 09:00-12:00，排休寫「假」</span></div>`);
+    det.innerHTML = parts.join('');
+  } catch (err) { msg.textContent = ''; det.innerHTML = `<div style="color:#c0392b">讀取失敗：${esc(err.message)}</div>`; }
+};
 document.getElementById('schedImport').onclick = () => {
   const m = pyMonth.value;
   const lines = document.getElementById('schedPaste').value.split(/\n+/).map(s => s.trim()).filter(Boolean);
