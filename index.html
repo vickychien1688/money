@@ -2337,8 +2337,18 @@ function mergeEngMonth(p, saved) {
   });
   return d;
 }
+/* 堂費定版：engData[姓名].fees 是這個月的堂費快照。
+   有快照就完全照快照算（連班級清單都用快照的），名冊改堂費或刪班級都不會回頭改這個月。 */
+function engFee(p, d, code) {
+  if (d && d.fees && d.fees[code] != null) return +d.fees[code] || 0;
+  const c = (p.classes || []).find(x => x.code === code);
+  return c ? (+c.fee || 0) : 0;
+}
+function engCodes(p, d) {
+  return (d && d.fees) ? Object.keys(d.fees) : (p.classes || []).map(c => c.code);
+}
 function engTotal(p, d) {
-  const sub = (p.classes || []).reduce((s, c) => s + (+d.cnt[c.code] || 0) * c.fee, 0);
+  const sub = engCodes(p, d).reduce((s, code) => s + (+d.cnt[code] || 0) * engFee(p, d, code), 0);
   return Math.round(sub + (+d.allow || 0) + d.extras.reduce((s, x) => s + (+x.amt || 0), 0) - d.deds.reduce((s, x) => s + (+x.amt || 0), 0));
 }
 function saveEng() { const cur = engData; markDirty('eng', engPath(pyMonth.value), () => cur); }
@@ -2380,9 +2390,9 @@ function renderEng() {
           const o = on.has(dt); const wk = (dow === 0 || dow === 6);
           cells += `<td class="schip" data-t="${ti}" data-cls="${esc(c.code)}" data-d="${dt}" style="cursor:pointer;min-width:20px;height:25px;border:1px solid #e3e8ee;text-align:center;font-size:12px;background:${o ? '#3f9e6e' : (wk ? '#f7f7f7' : '#fff')};color:#fff">${o ? '✓' : ''}</td>`;
         }
-        return `<tr><td style="font-size:12.5px;padding:2px 8px;white-space:nowrap;border:1px solid #e3e8ee"><button class="clsMove" data-t="${ti}" data-ci="${cx}" data-dir="-1" title="往上移" ${cx === 0 ? 'disabled' : ''} style="cursor:pointer;border:none;background:none;padding:0 1px;color:${cx === 0 ? '#ccc' : '#2980b9'}">↑</button><button class="clsMove" data-t="${ti}" data-ci="${cx}" data-dir="1" title="往下移" ${cx === p.classes.length - 1 ? 'disabled' : ''} style="cursor:pointer;border:none;background:none;padding:0 1px;color:${cx === p.classes.length - 1 ? '#ccc' : '#2980b9'}">↓</button> <b class="clsEdit" data-t="${ti}" data-ci="${cx}" title="點一下改班名或堂費" style="cursor:pointer;border-bottom:1px dashed #2980b9">${esc(c.code)}</b> <span style="color:#888;font-size:11px">${c.fee}${c.days ? '·' + esc(c.days) : ''}</span> <button class="del clsDel" data-t="${ti}" data-ci="${cx}" title="刪除這個班">✕</button></td>${cells}
+        return `<tr><td style="font-size:12.5px;padding:2px 8px;white-space:nowrap;border:1px solid #e3e8ee"><button class="clsMove" data-t="${ti}" data-ci="${cx}" data-dir="-1" title="往上移" ${cx === 0 ? 'disabled' : ''} style="cursor:pointer;border:none;background:none;padding:0 1px;color:${cx === 0 ? '#ccc' : '#2980b9'}">↑</button><button class="clsMove" data-t="${ti}" data-ci="${cx}" data-dir="1" title="往下移" ${cx === p.classes.length - 1 ? 'disabled' : ''} style="cursor:pointer;border:none;background:none;padding:0 1px;color:${cx === p.classes.length - 1 ? '#ccc' : '#2980b9'}">↓</button> <b class="clsEdit" data-t="${ti}" data-ci="${cx}" title="點一下改班名或堂費" style="cursor:pointer;border-bottom:1px dashed #2980b9">${esc(c.code)}</b> <span style="color:#888;font-size:11px">${engFee(p, d, c.code)}${c.days ? '·' + esc(c.days) : ''}</span> <button class="del clsDel" data-t="${ti}" data-ci="${cx}" title="刪除這個班">✕</button></td>${cells}
           <td style="font-size:12.5px;text-align:center;font-weight:bold;color:#1e6e1e;border:1px solid #e3e8ee">${d.cnt[c.code] || 0}</td>
-          <td style="font-size:12.5px;text-align:right;white-space:nowrap;padding:2px 6px;border:1px solid #e3e8ee">${((d.cnt[c.code] || 0) * c.fee).toLocaleString('zh-TW')}</td></tr>`;
+          <td style="font-size:12.5px;text-align:right;white-space:nowrap;padding:2px 6px;border:1px solid #e3e8ee">${((d.cnt[c.code] || 0) * engFee(p, d, c.code)).toLocaleString('zh-TW')}</td></tr>`;
       }).join('') + `</table></div>` +
       `<div style="font-size:12.5px;line-height:2">` +
       (d.allow ? `<span style="margin-right:10px;color:#1e8449">津貼 +${NT(d.allow)} <button class="del allowDel" data-t="${ti}" title="刪除本月津貼">✕</button></span>` : '') +
@@ -2487,9 +2497,13 @@ document.getElementById('engWrite').onclick = () => {
   if (!rows.length) return alert('沒有可寫入的薪資');
   if (!confirm(`確定把 ${rows.length} 位英文老師薪資寫入 ${pyMonth.value} 申報？（會取代上次寫入的英文明細）`)) return;
   payroll = payroll.filter(r => r.src !== 'eng');
+  rows.forEach(({ p, d }) => {   /* 已寫入申報＝堂費定版，之後改名冊不會回頭改它 */
+    if (!d.fees) { d.fees = {}; (p.classes || []).forEach(c => { d.fees[c.code] = +c.fee || 0; }); }
+  });
+  saveEng();
   rows.forEach(({ p, d }) => {
     const parts = [];
-    const cls = (p.classes || []).filter(c => +d.cnt[c.code]).map(c => `${c.code}×${d.cnt[c.code]}`).join('，');
+    const cls = engCodes(p, d).filter(code => +d.cnt[code]).map(code => `${code}×${d.cnt[code]}`).join('，');
     if (cls) parts.push(cls);
     if (+d.allow) parts.push('津貼' + d.allow);
     d.extras.forEach(x => parts.push(x.label + x.amt));
@@ -2728,6 +2742,16 @@ function freezeLockedMonth() {
   let ftChanged = false;
   ftRows.forEach(r => { if (locked.has(r.name) && r.insuranceManual !== true) { r.insuranceManual = true; ftChanged = true; } });
   if (ftChanged) saveFt();
+  let engChanged = false;
+  (staff.eng || []).forEach(p => {
+    if (!locked.has(p.cname || p.name)) return;
+    const d = engData[p.name];
+    if (!d || d.fees) return;
+    d.fees = {};
+    (p.classes || []).forEach(c => { d.fees[c.code] = +c.fee || 0; });
+    engChanged = true;
+  });
+  if (engChanged) saveEng();
 }
 function renderMonth() { renderFt(); renderPtCalc(); renderEng(); renderLeave(); renderPayrollAssistant(); }
 
@@ -2812,7 +2836,7 @@ document.getElementById('pyFinalize').onclick = () => {
   });
   d.pt.forEach(r => payroll.push({ who:r.name, cat:'薪資', amt:r.net, tax:PY_TAX, note:`PT ${r.hrs}時×${r.rate}` + r.courseItems.filter(x => courseItemPay(x)).map(x => `＋${x.name || '額外課程'}${x.hours}時×${x.rate}`).join('') + (r.extra ? `＋${r.extraNote || '加項'}${r.extra}` : '') + (r.labor ? `－勞保${r.labor}` : '') + (r.health ? `－健保${r.health}` : ''), at:stamp(), by:who(), src:'pt' }));
   d.eng.forEach(({p,d:x}) => {
-    const parts = [], cls = (p.classes || []).filter(c => +x.cnt[c.code]).map(c => `${c.code}×${x.cnt[c.code]}`).join('，');
+    const parts = [], cls = engCodes(p, x).filter(code => +x.cnt[code]).map(code => `${code}×${x.cnt[code]}`).join('，');
     if (cls) parts.push(cls); if (+x.allow) parts.push('津貼' + x.allow); x.extras.forEach(a => parts.push(a.label + a.amt)); x.deds.forEach(a => { if (+a.amt) parts.push(a.label + '-' + a.amt); });
     payroll.push({ who:p.cname || p.name, cat:'薪資', amt:engTotal(p,x), tax:PY_TAX, note:'英文' + (p.cname ? '(' + p.name + ')' : '') + '：' + parts.join('，'), at:stamp(), by:who(), src:'eng' });
   });
