@@ -405,9 +405,10 @@
   <div class="card payroll-view pv-run payroll-detail payroll-group pg-pt">
     <h2>⏱ PT 薪資（打卡薪資＋額外課程薪資－勞健保）</h2>
       <div id="ptLockBanner"></div>
+      <p class="hint">每一格（時數、時薪、勞保、健保、加項）都是<b>各自存檔</b>的：改某一個人只會影響他自己這個月，不會動到別人，也不會動到別的月份。想讓某一格回到自動計算，把那格清空即可。</p>
     <div id="ptInfo" class="hint"></div>
     <table class="ledger" id="ptCalc" style="margin-top:8px"></table>
-    <div style="margin-top:10px"><button class="btn green" id="ptWrite">✍ 寫入本月薪資申報</button></div>
+    <div style="margin-top:10px"><button class="btn sm" id="ptPin">📌 固定本月數字</button> <span id="ptPinMsg" style="font-size:12.5px;color:#1e8449;margin-right:10px"></span><button class="btn green" id="ptWrite">✍ 寫入本月薪資申報</button></div>
   </div>
 
   <div class="card payroll-view pv-run payroll-detail payroll-group pg-eng">
@@ -2273,6 +2274,20 @@ function renderPtCalc() {
   });
   bindPunchDetail(t, i => ({ name: ptRows()[i].name }), 10, true);
 }
+document.getElementById('ptPin').onclick = () => {
+  const rows = ptRows();
+  if (!rows.length) return alert('本月沒有兼職資料');
+  if (!confirm(`把 ${pyMonth.value} 全部 ${rows.length} 位兼職現在的「時數、時薪、勞保、健保」固定下來？\n\n` +
+    `固定之後，改員工名冊或重匯打卡都不會再改到這個月。\n` +
+    `要調整某一個人，直接改他那一列就好，不會動到別人。\n` +
+    `某一格想改回自動計算，把那格清空即可。`)) return;
+  rows.forEach(r => {
+    const o = (ptOv[r.name] = ptOv[r.name] || {});
+    o.hrs = r.hrs; o.rate = r.rate; o.labor = r.labor; o.health = r.health;
+  });
+  savePtOv(); renderPtCalc();
+  document.getElementById('ptPinMsg').textContent = `✔ 已固定 ${rows.length} 位`;
+};
 document.getElementById('ptWrite').onclick = () => {
   const rows = ptRows().filter(r => r.net > 0);
   if (!rows.length) return alert('沒有可寫入的薪資');
@@ -2681,11 +2696,22 @@ async function loadMonth() {
   engData = {};
   staff.eng.forEach(p => { engData[p.name] = mergeEngMonth(p, (en || {})[p.name]); });
   await loadScheduleImages(si || []);
+  pinPtRates();
   freezeLockedMonth();
   renderMonth();
 }
 /* 已經發過薪的月份，把當下算出來的勞健保釘進存檔，之後改名冊就不會回頭改它。
    只補「還沒釘過」的欄位，已經手動改過的值不動。 */
+/* 時薪不會因為打卡而變，每個月第一次載入就先固定住，
+   之後調名冊的時薪不會回頭改已經在跑的月份。要改就改計薪表那一列。 */
+function pinPtRates() {
+  let changed = false;
+  (staff.pt || []).filter(p => p.active !== false).forEach(p => {
+    const o = (ptOv[p.name] = ptOv[p.name] || {});
+    if (o.rate == null && p.rate) { o.rate = p.rate; changed = true; }
+  });
+  if (changed) savePtOv();
+}
 function freezeLockedMonth() {
   const locked = lockedPeople();
   if (!locked.size) return;
