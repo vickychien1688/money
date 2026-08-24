@@ -2711,8 +2711,29 @@ async function loadMonth() {
   staff.eng.forEach(p => { engData[p.name] = mergeEngMonth(p, (en || {})[p.name]); });
   await loadScheduleImages(si || []);
   pinPtRates();
+  pinEngFees();
+  snapshotMonth(!ft, !en);
   freezeLockedMonth();
   renderMonth();
+}
+/* 每個月第一次打開，就把這個月的底薪、職務加給、堂費等從名冊帶出來的數字
+   存成「這個月自己的檔案」。之後改員工名冊只會影響還沒開過的月份，
+   已經在跑的月份要調就到那個月的計薪表改那一列。 */
+function snapshotMonth(noFtFile, noEngFile) {
+  if (noFtFile && ftRows.length) saveFt();
+  if (noEngFile && Object.keys(engData).length) saveEng();
+}
+/* 堂費不會因為堂數而變，每個月第一次載入就固定住 */
+function pinEngFees() {
+  let changed = false;
+  (staff.eng || []).forEach(p => {
+    const d = engData[p.name];
+    if (!d || d.fees) return;
+    d.fees = {};
+    (p.classes || []).forEach(c => { d.fees[c.code] = +c.fee || 0; });
+    changed = true;
+  });
+  if (changed) saveEng();
 }
 /* 已經發過薪的月份，把當下算出來的勞健保釘進存檔，之後改名冊就不會回頭改它。
    只補「還沒釘過」的欄位，已經手動改過的值不動。 */
