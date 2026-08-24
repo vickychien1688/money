@@ -1391,7 +1391,7 @@ function renderStaff() {
       <td><button class="del" data-g="full" data-i="${i}">✕</button></td></tr>`;
     }).join('');
   const t = document.getElementById('stPt');
-  t.innerHTML = `<tr><th>姓名</th><th>到職日</th><th>每週約定時數</th><th>在職</th><th>時薪</th><th>有投保</th><th>依${INSURANCE_TABLE_YEAR}年自動</th><th>手動級距</th><th>勞保扣額</th><th>Email</th><th>別名</th><th></th></tr>` +
+  t.innerHTML = `<tr><th>姓名</th><th>到職日</th><th>每週約定時數</th><th>在職</th><th>時薪</th><th>有投保</th><th>依${INSURANCE_TABLE_YEAR}年自動</th><th>手動級距</th><th>勞保扣額</th><th>健保投保薪資</th><th>Email</th><th>別名</th><th></th></tr>` +
     staff.pt.map((p, i) => `<tr style="${p.active === false ? 'opacity:.5;background:#f3f3f3' : ''}"><td class="l">${esc(p.name)}${p.active === false ? '<br><span style="font-size:10.5px;color:#888">已離職</span>' : ''}</td>
       <td><input type="date" data-g="pt" data-i="${i}" data-k="onboard" value="${esc(p.onboard || '')}" ${isl(112)}></td>
       <td><input type="number" data-g="pt" data-i="${i}" data-k="weeklyHours" value="${p.weeklyHours || ''}" min="0" max="40" step="0.5" ${ist(64)}></td>
@@ -1401,6 +1401,7 @@ function renderStaff() {
       <td><input type="checkbox" data-g="pt" data-i="${i}" data-k="autoGrade" ${p.autoGrade === false ? '' : 'checked'} ${p.grade ? '' : 'disabled'} aria-label="${esc(p.name)}自動投保級距"></td>
       <td><input type="number" data-g="pt" data-i="${i}" data-k="grade" value="${p.grade || ''}" placeholder="未投保" ${p.autoGrade === false && p.grade ? '' : 'disabled'} ${ist(76)}></td>
       <td class="num">${p.grade ? NT(laborEmp(p.grade)) : '—'}</td>
+      <td><input type="number" data-g="pt" data-i="${i}" data-k="hgrade" value="${p.hgrade == null ? '' : p.hgrade}" placeholder="沒保留空" title="兼職留空＝沒保健保不扣；填了投保薪資才扣" ${ist(84)}>${p.hgrade ? `<br><span style="font-size:10.5px;color:#789">扣 ${NT(healthEmp(+p.hgrade))}</span>` : ''}</td>
       <td><input type="email" data-g="pt" data-i="${i}" data-k="email" value="${esc(p.email || '')}" placeholder="薪資單寄送用" ${isl(150)}></td>
       <td><input data-g="pt" data-i="${i}" data-k="aliases" value="${esc((p.aliases || []).join('、'))}" placeholder="打卡系統的其他寫法" ${isl(130)}></td>
       <td><button class="del" data-g="pt" data-i="${i}">✕</button></td></tr>`).join('');
@@ -2093,8 +2094,10 @@ function ptRows() {
     const pay = R1(hrs * p.rate);
     const grade = p.grade ? (p.autoGrade === false ? +p.grade : insuranceGrade115(pay + course + extra, true)) : 0;
     const labor = (o.labor != null) ? +o.labor : laborEmp(grade);
-    const net = (pay + course + extra) > 0 ? Math.round(pay + course + extra - labor) : 0;   /* 當月沒薪資就不扣勞保；實發四捨五入取整 */
-    return { name: p.name, rate: p.rate, hrs, auto, courseItems, course, extra, extraNote: o.extraNote || '', grade, labor, pay, net };
+    /* 兼職多數沒保健保：健保投保薪資留空＝沒保不扣，填了數字才扣 */
+    const health = (o.health != null) ? +o.health : healthEmp(+p.hgrade || 0);
+    const net = (pay + course + extra) > 0 ? Math.round(pay + course + extra - labor - health) : 0;   /* 當月沒薪資就不扣勞健保；實發四捨五入取整 */
+    return { name: p.name, rate: p.rate, hrs, auto, courseItems, course, extra, extraNote: o.extraNote || '', grade, labor, health, hgrade: +p.hgrade || 0, pay, net };
   });
 }
 function savePtOv() { const cur = ptOv; markDirty('ptov', ptOvPath(pyMonth.value), () => cur); }
@@ -2106,7 +2109,7 @@ function renderPtCalc() {
   const rows = ptRows();
   if (!rows.length) { t.innerHTML = ''; return; }
   const st = 'padding:4px;border:1px solid #c6cfda;border-radius:5px;text-align:right';
-  t.innerHTML = '<tr><th>姓名</th><th>一般時數</th><th>時薪</th><th>一般薪資</th><th>額外課程</th><th>其他加項</th><th>加項備註</th><th>勞保−</th><th>匯款</th></tr>' +
+  t.innerHTML = '<tr><th>姓名</th><th>一般時數</th><th>時薪</th><th>一般薪資</th><th>額外課程</th><th>其他加項</th><th>加項備註</th><th>勞保−</th><th>健保−</th><th>匯款</th></tr>' +
     rows.map((r, i) => `<tr><td class="l">${esc(r.name)}<br><a data-det="${i}" style="font-size:11px;color:#2980b9;cursor:pointer">打卡明細▾</a></td>
       <td><input type="number" step="0.01" data-i="${i}" data-k="hrs" value="${r.hrs}" style="width:68px;${st}">${r.hrs !== r.auto ? '<span style="font-size:11px;color:#e67e22">改</span>' : ''}<br><span style="font-size:10.5px;color:#789">${Math.floor(r.hrs)}小時 ${Math.round((r.hrs - Math.floor(r.hrs)) * 60)}分</span></td>
       <td class="num">${NT(r.rate)}</td><td class="num" id="ptPay${i}">${NT(r.pay)}</td>
@@ -2114,8 +2117,9 @@ function renderPtCalc() {
       <td><input type="number" data-i="${i}" data-k="extra" value="${r.extra || ''}" style="width:64px;${st}"></td>
       <td><input data-i="${i}" data-k="extraNote" value="${esc(r.extraNote)}" placeholder="代課／獎金說明" style="width:92px;padding:4px;border:1px solid #c6cfda;border-radius:5px"></td>
       <td><input type="number" id="ptLabor${i}" data-i="${i}" data-k="labor" value="${r.labor || ''}" style="width:56px;${st}"><br><span id="ptGrade${i}" style="font-size:10.5px;color:#789">${r.grade ? `${INSURANCE_TABLE_YEAR}年級距 ${r.grade.toLocaleString('zh-TW')}` : '未投保'}</span></td>
+      <td><input type="number" id="ptHealth${i}" data-i="${i}" data-k="health" value="${r.health || ''}" style="width:56px;${st}"><br><span id="ptHG${i}" style="font-size:10.5px;color:#789">${r.hgrade ? `健保 ${r.hgrade.toLocaleString('zh-TW')}` : '沒保健保'}</span></td>
       <td class="num" id="ptNet${i}"><b>${NT(r.net)}</b></td></tr>`).join('') +
-    `<tr class="subtotal"><td colspan="8">合計（匯款）</td><td class="num" id="ptTotal">${NT(R1(rows.reduce((s, r) => s + r.net, 0)))}</td></tr>`;
+    `<tr class="subtotal"><td colspan="9">合計（匯款）</td><td class="num" id="ptTotal">${NT(R1(rows.reduce((s, r) => s + r.net, 0)))}</td></tr>`;
   t.querySelectorAll('.course-add').forEach(b => b.onclick = () => {
     const name = ptRows()[+b.dataset.i].name, o = (ptOv[name] = ptOv[name] || {});
     (o.courseItems = o.courseItems || []).push({ name: '', hours: 0, rate: 0 }); savePtOv(); renderPtCalc();
@@ -2130,6 +2134,7 @@ function renderPtCalc() {
     x[k] = el.type === 'number' ? (+el.value || 0) : el.value;
     const rr = ptRows()[i]; document.getElementById('ptCourse' + i).textContent = NT(rr.course);
     document.getElementById('ptLabor' + i).value = rr.labor || '';
+    document.getElementById('ptHealth' + i).value = rr.health || '';
     document.getElementById('ptGrade' + i).textContent = rr.grade ? `${INSURANCE_TABLE_YEAR}年級距 ${rr.grade.toLocaleString('zh-TW')}` : '未投保';
     document.getElementById('ptNet' + i).innerHTML = '<b>' + NT(rr.net) + '</b>';
     document.getElementById('ptTotal').textContent = NT(R1(ptRows().reduce((s, y) => s + y.net, 0))); savePtOv();
@@ -2143,11 +2148,12 @@ function renderPtCalc() {
     const rr = ptRows()[i];
     document.getElementById('ptPay' + i).textContent = NT(rr.pay);
     if (k !== 'labor') document.getElementById('ptLabor' + i).value = rr.labor || '';
+    if (k !== 'health') document.getElementById('ptHealth' + i).value = rr.health || '';
     document.getElementById('ptGrade' + i).textContent = rr.grade ? `${INSURANCE_TABLE_YEAR}年級距 ${rr.grade.toLocaleString('zh-TW')}` : '未投保';
     document.getElementById('ptNet' + i).innerHTML = '<b>' + NT(rr.net) + '</b>';
     document.getElementById('ptTotal').textContent = NT(R1(ptRows().reduce((s, r) => s + r.net, 0)));
   });
-  bindPunchDetail(t, i => ({ name: ptRows()[i].name }), 9, true);
+  bindPunchDetail(t, i => ({ name: ptRows()[i].name }), 10, true);
 }
 document.getElementById('ptWrite').onclick = () => {
   const rows = ptRows().filter(r => r.net > 0);
@@ -2155,7 +2161,7 @@ document.getElementById('ptWrite').onclick = () => {
   if (!confirm(`確定把 ${rows.length} 位 PT 薪資寫入 ${pyMonth.value} 申報？（會取代上次寫入的 PT 明細）\n` + rows.map(r => `${r.name}：一般${NT(r.pay)}${r.course ? `＋額外課程${NT(r.course)}` : ''}＝實發${NT(r.net)}`).join('\n'))) return;
   payroll = payroll.filter(r => r.src !== 'pt');
   rows.forEach(r => payroll.push({ who: r.name, cat: '薪資', amt: r.net, tax: PY_TAX,
-    note: `PT ${r.hrs}時×${r.rate}` + r.courseItems.filter(x => courseItemPay(x)).map(x => `＋${x.name || '額外課程'}${x.hours}時×${x.rate}`).join('') + (r.extra ? `＋${r.extraNote || '加項'}${r.extra}` : '') + (r.labor ? `－勞保${r.labor}` : ''), at: stamp(), by: who(), src: 'pt' }));
+    note: `PT ${r.hrs}時×${r.rate}` + r.courseItems.filter(x => courseItemPay(x)).map(x => `＋${x.name || '額外課程'}${x.hours}時×${x.rate}`).join('') + (r.extra ? `＋${r.extraNote || '加項'}${r.extra}` : '') + (r.labor ? `－勞保${r.labor}` : '') + (r.health ? `－健保${r.health}` : ''), at: stamp(), by: who(), src: 'pt' }));
   renderPayroll(); savePayroll(); alert('已寫入 ' + rows.length + ' 筆！');
 };
 
@@ -2388,7 +2394,7 @@ function buildSlips() {
     slips.push({ name: r.name, email: (staff.pt.find(x => x.name === r.name) || {}).email || '', type: 'PT', total: r.net, extraTitle: '打卡與特休明細', extra: pd + leaveBlock(r.name), body:
       `<tr><td>時數 ${r.hrs} 時 × 時薪 ${r.rate}</td><td style="text-align:right">${r.pay.toLocaleString('zh-TW')}</td></tr>` +
       r.courseItems.map(x => row(`${esc(x.name || '額外課程')} ${x.hours || 0} 時 × ${x.rate || 0}`, courseItemPay(x))).join('') +
-      row(esc(r.extraNote || '加項'), r.extra) + row('勞保', r.labor, true) });
+      row(esc(r.extraNote || '加項'), r.extra) + row('勞保', r.labor, true) + row('健保', r.health, true) });
   });
   const [yy2, mo2] = m.split('-').map(Number);
   const mdN = new Date(yy2, mo2, 0).getDate();
@@ -2631,7 +2637,7 @@ document.getElementById('pyFinalize').onclick = () => {
     if (+r.adj) parts.push('出缺勤' + (r.adj > 0 ? '+' : '') + r.adj); if (+r.labor) parts.push('勞保-' + r.labor); if (+r.health) parts.push('健保-' + r.health); if (r.note) parts.push(r.note);
     payroll.push({ who:r.name, cat:'薪資', amt:ftTotal(r), tax:PY_TAX, note:'正職：底薪' + r.base + (parts.length ? '，' + parts.join('，') : ''), at:stamp(), by:who(), src:'ft' });
   });
-  d.pt.forEach(r => payroll.push({ who:r.name, cat:'薪資', amt:r.net, tax:PY_TAX, note:`PT ${r.hrs}時×${r.rate}` + r.courseItems.filter(x => courseItemPay(x)).map(x => `＋${x.name || '額外課程'}${x.hours}時×${x.rate}`).join('') + (r.extra ? `＋${r.extraNote || '加項'}${r.extra}` : '') + (r.labor ? `－勞保${r.labor}` : ''), at:stamp(), by:who(), src:'pt' }));
+  d.pt.forEach(r => payroll.push({ who:r.name, cat:'薪資', amt:r.net, tax:PY_TAX, note:`PT ${r.hrs}時×${r.rate}` + r.courseItems.filter(x => courseItemPay(x)).map(x => `＋${x.name || '額外課程'}${x.hours}時×${x.rate}`).join('') + (r.extra ? `＋${r.extraNote || '加項'}${r.extra}` : '') + (r.labor ? `－勞保${r.labor}` : '') + (r.health ? `－健保${r.health}` : ''), at:stamp(), by:who(), src:'pt' }));
   d.eng.forEach(({p,d:x}) => {
     const parts = [], cls = (p.classes || []).filter(c => +x.cnt[c.code]).map(c => `${c.code}×${x.cnt[c.code]}`).join('，');
     if (cls) parts.push(cls); if (+x.allow) parts.push('津貼' + x.allow); x.extras.forEach(a => parts.push(a.label + a.amt)); x.deds.forEach(a => { if (+a.amt) parts.push(a.label + '-' + a.amt); });
