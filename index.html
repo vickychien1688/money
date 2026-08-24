@@ -2194,13 +2194,14 @@ function ptRows() {
     const courseItems = (o.courseItems || []).map(x => ({ name: x.name || '', hours: +x.hours || 0, rate: +x.rate || 0 }));
     const course = R1(courseItems.reduce((s, x) => s + courseItemPay(x), 0));
     const extra = +o.extra || 0;
-    const pay = R1(hrs * p.rate);
+    const rate = (o.rate != null) ? +o.rate : p.rate;   /* 時薪也定版，改名冊不會回頭改已發薪的月份 */
+    const pay = R1(hrs * rate);
     const grade = p.grade ? (p.autoGrade === false ? +p.grade : insuranceGrade115(pay + course + extra, true)) : 0;
     const labor = (o.labor != null) ? +o.labor : laborEmp(grade);
     /* 兼職多數沒保健保：健保投保薪資留空＝沒保不扣，填了數字才扣 */
     const health = (o.health != null) ? +o.health : healthEmp(+p.hgrade || 0);
     const net = (pay + course + extra) > 0 ? Math.round(pay + course + extra - labor - health) : 0;   /* 當月沒薪資就不扣勞健保；實發四捨五入取整 */
-    return { name: p.name, rate: p.rate, hrs, auto, courseItems, course, extra, extraNote: o.extraNote || '', grade, labor, health, hgrade: +p.hgrade || 0, pay, net };
+    return { name: p.name, rate, hrs, auto, courseItems, course, extra, extraNote: o.extraNote || '', grade, labor, health, hgrade: +p.hgrade || 0, pay, net };
   });
 }
 function savePtOv() { const cur = ptOv; markDirty('ptov', ptOvPath(pyMonth.value), () => cur); }
@@ -2228,7 +2229,7 @@ function renderPtCalc() {
   t.innerHTML = '<tr><th>姓名</th><th>一般時數</th><th>時薪</th><th>一般薪資</th><th>額外課程</th><th>其他加項</th><th>加項備註</th><th>勞保−</th><th>健保−</th><th>匯款</th></tr>' +
     rows.map((r, i) => `<tr><td class="l">${esc(r.name)}<br><a data-det="${i}" style="font-size:11px;color:#2980b9;cursor:pointer">打卡明細▾</a></td>
       <td><input type="number" step="0.01" data-i="${i}" data-k="hrs" value="${r.hrs}" style="width:68px;${st}">${r.hrs !== r.auto ? '<span style="font-size:11px;color:#e67e22">改</span>' : ''}<br><span style="font-size:10.5px;color:#789">${Math.floor(r.hrs)}小時 ${Math.round((r.hrs - Math.floor(r.hrs)) * 60)}分</span></td>
-      <td class="num">${NT(r.rate)}</td><td class="num" id="ptPay${i}">${NT(r.pay)}</td>
+      <td><input type="number" id="ptRate${i}" data-i="${i}" data-k="rate" value="${r.rate || ''}" style="width:60px;${st}"></td><td class="num" id="ptPay${i}">${NT(r.pay)}</td>
       <td>${r.courseItems.map((x, j) => `<div style="white-space:nowrap;margin-bottom:4px"><input data-i="${i}" data-course-i="${j}" data-course-k="name" value="${esc(x.name)}" placeholder="例：G8數學課" style="width:88px;padding:4px;border:1px solid #c6cfda;border-radius:5px"> <input type="number" min="0" step="0.25" data-i="${i}" data-course-i="${j}" data-course-k="hours" value="${x.hours || ''}" placeholder="時數" style="width:46px;${st}"> × <input type="number" min="0" data-i="${i}" data-course-i="${j}" data-course-k="rate" value="${x.rate || ''}" placeholder="時薪" style="width:50px;${st}"> <button type="button" class="course-remove" data-i="${i}" data-course-i="${j}" style="border:0;background:none;color:#c0392b;cursor:pointer;padding:0">✕</button></div>`).join('')}<div style="font-size:11px;color:#2980b9">課程小計 <span id="ptCourse${i}">${NT(r.course)}</span>　<button type="button" class="course-add btn sm" data-i="${i}">＋加入課程</button></div></td>
       <td><input type="number" data-i="${i}" data-k="extra" value="${r.extra || ''}" style="width:64px;${st}"></td>
       <td><input data-i="${i}" data-k="extraNote" value="${esc(r.extraNote)}" placeholder="代課／獎金說明" style="width:92px;padding:4px;border:1px solid #c6cfda;border-radius:5px"></td>
@@ -2263,6 +2264,7 @@ function renderPtCalc() {
     savePtOv();
     const rr = ptRows()[i];
     document.getElementById('ptPay' + i).textContent = NT(rr.pay);
+    if (k !== 'rate') document.getElementById('ptRate' + i).value = rr.rate || '';
     if (k !== 'labor') document.getElementById('ptLabor' + i).value = rr.labor || '';
     if (k !== 'health') document.getElementById('ptHealth' + i).value = rr.health || '';
     document.getElementById('ptGrade' + i).textContent = rr.grade ? `${INSURANCE_TABLE_YEAR}年級距 ${rr.grade.toLocaleString('zh-TW')}` : '未投保';
@@ -2280,6 +2282,7 @@ document.getElementById('ptWrite').onclick = () => {
   rows.forEach(r => {
     const o = (ptOv[r.name] = ptOv[r.name] || {});
     if (o.hrs == null) o.hrs = r.hrs;
+    if (o.rate == null) o.rate = r.rate;
     if (o.labor == null) o.labor = r.labor;
     if (o.health == null) o.health = r.health;
   });
@@ -2691,6 +2694,7 @@ function freezeLockedMonth() {
     if (!locked.has(r.name)) return;
     const o = (ptOv[r.name] = ptOv[r.name] || {});
     if (o.hrs == null) { o.hrs = r.hrs; changed = true; }
+    if (o.rate == null) { o.rate = r.rate; changed = true; }
     if (o.labor == null) { o.labor = r.labor; changed = true; }
     if (o.health == null) { o.health = r.health; changed = true; }
   });
