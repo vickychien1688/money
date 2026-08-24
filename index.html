@@ -2032,9 +2032,10 @@ function allowanceDesc(label, note, amount) { return `${label}${note ? '（' + n
 function ftTotal(r) { return Math.round((+r.base || 0) + allowanceTotal(r) + coursePay(r) - (+r.late || 0) + (+r.adj || 0) - (+r.labor || 0) - (+r.health || 0)); }
 function saveFt() { const cur = ftRows; markDirty('ft', ftPath(pyMonth.value), () => cur); }
 function lockBanner() {
-  return monthLocked()
-    ? `<div style="margin:6px 0;padding:8px 10px;border:1px solid #f0c36d;border-radius:8px;background:#fdf6e3;font-size:12.5px;color:#8a4b08">🔒 <b>${pyMonth.value} 已經寫入薪資申報</b>，每個人的時數與勞健保都已經定版，之後改員工名冊或重匯打卡都不會回頭改這個月。要改某一個人，直接改他那一列就好，不會動到別人。</div>`
-    : '';
+  const locked = [...lockedPeople()];
+  if (!locked.length) return '';
+  const who = locked.slice(0, 8).join('、') + (locked.length > 8 ? ` 等 ${locked.length} 位` : '');
+  return `<div style="margin:6px 0;padding:8px 10px;border:1px solid #f0c36d;border-radius:8px;background:#fdf6e3;font-size:12.5px;color:#8a4b08">🔒 <b>${pyMonth.value} 已經有 ${locked.length} 位寫入薪資申報</b>（${esc(who)}）。<b>這幾位</b>的時數與勞健保已經定版，之後改員工名冊或重匯打卡都不會回頭改他們；<b>其他人照常試算</b>。要改某一個人，直接改他那一列就好，不會動到別人。</div>`;
 }
 function renderFt() {
   const t = document.getElementById('ftTable');
@@ -2203,12 +2204,17 @@ function ptRows() {
   });
 }
 function savePtOv() { const cur = ptOv; markDirty('ptov', ptOvPath(pyMonth.value), () => cur); }
-/* 這個月已經寫入申報（＝薪資已經發出去）就算定版，重算類的操作要先問過 */
-function monthLocked() { return (payroll || []).some(r => r.src === 'ft' || r.src === 'pt' || r.src === 'eng'); }
+/* 定版是「一個人一個人」算的：只有已經寫入薪資申報（＝薪水已經發出去）的人才定版，
+   其他人照常跟著名冊試算。改一個人不會動到別人。 */
+function lockedPeople() {
+  return new Set((payroll || []).filter(r => ['ft', 'pt', 'eng'].includes(r.src)).map(r => r.who));
+}
+function monthLocked() { return lockedPeople().size > 0; }
 function confirmRecalc(what) {
   if (!monthLocked()) return true;
-  return confirm(`⚠ ${pyMonth.value} 已經寫入薪資申報（薪資單可能已經發出去了）。\n\n` +
-    `${what}會改掉這個月已經算好的數字，跟當初發出去的對不起來。\n\n真的要重算嗎？`);
+  const locked = [...lockedPeople()];
+  return confirm(`⚠ ${pyMonth.value} 已經有 ${locked.length} 位寫入薪資申報（薪資單可能已經發出去了）：\n${locked.slice(0, 10).join('、')}${locked.length > 10 ? ' …' : ''}\n\n` +
+    `${what}可能會改掉已經算好的數字，跟當初發出去的對不起來。\n\n真的要重算嗎？`);
 }
 function renderPtCalc() {
   const t = document.getElementById('ptCalc');
@@ -2678,16 +2684,19 @@ async function loadMonth() {
 /* 已經發過薪的月份，把當下算出來的勞健保釘進存檔，之後改名冊就不會回頭改它。
    只補「還沒釘過」的欄位，已經手動改過的值不動。 */
 function freezeLockedMonth() {
-  if (!monthLocked()) return;
+  const locked = lockedPeople();
+  if (!locked.size) return;
   let changed = false;
   ptRows().forEach(r => {
+    if (!locked.has(r.name)) return;
     const o = (ptOv[r.name] = ptOv[r.name] || {});
+    if (o.hrs == null) { o.hrs = r.hrs; changed = true; }
     if (o.labor == null) { o.labor = r.labor; changed = true; }
     if (o.health == null) { o.health = r.health; changed = true; }
   });
   if (changed) savePtOv();
   let ftChanged = false;
-  ftRows.forEach(r => { if (r.insuranceManual !== true) { r.insuranceManual = true; ftChanged = true; } });
+  ftRows.forEach(r => { if (locked.has(r.name) && r.insuranceManual !== true) { r.insuranceManual = true; ftChanged = true; } });
   if (ftChanged) saveFt();
 }
 function renderMonth() { renderFt(); renderPtCalc(); renderEng(); renderLeave(); renderPayrollAssistant(); }
