@@ -1028,7 +1028,8 @@ function parseBankLine(ln) {
   for (const f of five) rest = rest.replace(new RegExp('(?<!\\d)' + f + '(?!\\d)'), ' ');
   const toks = rest.match(/\d{1,3}(?:,\d{3})+|\d+/g) || [];
   const withComma = toks.filter(t => t.includes(','));
-  const cand = (withComma.length ? withComma : toks).map(t => +t.replace(/,/g, '')).filter(n => n >= 100);
+  /* 小額補收也可能低於 100 元（例如 80 元），只排除 0，不可漏掉合法存款。 */
+  const cand = (withComma.length ? withComma : toks).map(t => +t.replace(/,/g, '')).filter(n => n > 0);
   if (!five.length || !cand.length) return null;
   const last5 = five.find(f => rosterFind(f)) || five[five.length - 1];
   return { d, amt: cand[0], last5 };
