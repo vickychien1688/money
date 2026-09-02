@@ -879,7 +879,11 @@ function renderPending() {
       if (pendingClaimed(p) !== sourceAmt) return alert('拆分合計還沒有等於銀行原始款');
       const claims = p.claims || [];
       if (!claims.length) return;
-      if (!confirm(`確認把 ${pendingSourceLabel(p)} 拆成 ${claims.length} 筆正式收入？`)) return;
+      if (b.dataset.confirmed !== '1') {
+        b.dataset.confirmed = '1';
+        b.textContent = `再按一次確認 ${claims.length} 筆入帳`;
+        return;
+      }
       b.disabled = true; b.textContent = '入帳中…';
       try {
         const targetMonth = p.d.slice(0, 7);
