@@ -792,7 +792,7 @@ document.getElementById('billImport').onclick = () => {
   const agg = {};
   let bad = 0;
   for (const ln of lines) {
-    const m = ln.match(/(\d{1,3}(?:,\d{3})+|\d+)\s*$/);
+    const m = ln.match(/(-?(?:\d{1,3}(?:,\d{3})+|\d+))\s*$/);
     if (!m) { bad++; continue; }
     const amt = +m[1].replace(/,/g, '');
     let rest = ln.slice(0, m.index);
